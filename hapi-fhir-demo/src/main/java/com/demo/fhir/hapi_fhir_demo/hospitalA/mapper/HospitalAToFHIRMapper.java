@@ -29,9 +29,15 @@ public class HospitalAToFHIRMapper {
             patient.setGender(AdministrativeGender.FEMALE);
         }
 
+        //negative test
+        //patient.getGenderElement().setValueAsString("INVALID_GENDER");
+
         //Date of Birth
         LocalDate dob = LocalDate.parse(source.getDob(), INPUT_FORMAT);
         patient.setBirthDate(java.sql.Date.valueOf(dob));
+
+        //negative test
+        //patient.getBirthDateElement().setValueAsString("19/08/2003");
 
         return patient;
     }

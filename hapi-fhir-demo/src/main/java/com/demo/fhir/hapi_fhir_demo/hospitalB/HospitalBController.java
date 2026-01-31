@@ -1,13 +1,23 @@
 package com.demo.fhir.hapi_fhir_demo.hospitalB;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import ca.uhn.fhir.context.FhirContext;
+import com.demo.fhir.hapi_fhir_demo.hospitalB.mapper.FHIRToHospitalBMapper;
+import com.demo.fhir.hapi_fhir_demo.hospitalB.model.HospitalBPatient;
+import org.hl7.fhir.r4.model.Patient;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
+@RequestMapping("/hospitalB")
 public class HospitalBController {
 
-    @GetMapping("/hospitalB/ping")
-    public String pingHospitalB() {
-        return "Hospital B system is up";
+    private final FhirContext ctx = FhirContext.forR4();
+
+    @PostMapping("/patient/receive-fhir")
+    public HospitalBPatient receiveFHIR(@RequestBody String fhirJson) {
+        //Parse FHIR JSON
+        Patient patient = ctx.newJsonParser().parseResource(Patient.class, fhirJson);
+
+        // Convert to Hospital-B format
+        return FHIRToHospitalBMapper.mapToHospitalB(patient);
     }
 }

@@ -1,0 +1,159 @@
+Phase 1: FHIR-Based Health Record Interoperability
+
+1. Objective of Phase 1
+
+The objective of Phase 1 is to demonstrate interoperability between two heterogeneous hospital systems using the FHIR standard as a canonical exchange format.
+
+Key goals:
+	•	Show that hospitals may have different internal data formats
+	•	Use FHIR only as an intermediate representation, not as storage
+	•	Validate that transferred data conforms to FHIR standards
+
+⸻
+
+2. System Overview
+
+Phase 1 simulates two independent hospital systems:
+	•	Hospital A: Source system with its own legacy JSON format
+	•	Hospital B: Destination system with a different internal JSON format
+
+FHIR acts as the bridge between the two systems.
+
+Hospital A (Legacy JSON)
+        ↓
+FHIR Patient Resource (Validated)
+        ↓
+Hospital B (Legacy JSON)
+
+
+⸻
+
+3. Hospital A – Internal Data Model
+
+Hospital A does not store data in FHIR format. It uses a local schema as shown below:
+
+{
+  "patientId": "A123",
+  "name": "Siddhesh Abhang",
+  "dob": "19/08/2003",
+  "gender": "M"
+}
+
+Characteristics
+	•	Date format: dd/MM/yyyy
+	•	Gender values: M / F
+	•	Flat name field
+
+This format is intentionally non-standard to simulate a real legacy hospital system.
+
+⸻
+
+4. Conversion: Hospital A → FHIR
+
+Hospital A data is converted into a FHIR Patient resource using a dedicated mapper.
+
+Key Transformations
+
+Hospital A	FHIR
+patientId	Patient.id
+name	HumanName.text
+dob (19/08/2003)	birthDate (2003-08-19)
+gender = M	gender = male
+
+Output FHIR Patient
+
+{
+  "resourceType": "Patient",
+  "id": "A123",
+  "name": [
+    { "text": "Siddhesh Abhang" }
+  ],
+  "gender": "male",
+  "birthDate": "2003-08-19"
+}
+
+
+⸻
+
+5. FHIR Validation
+
+All generated FHIR resources are validated using HAPI FHIR Validator.
+
+Validation Guarantees
+	•	Correct data types
+	•	Valid value sets (e.g., gender)
+	•	Proper date formats
+	•	Structural compliance
+
+Negative Testing
+
+Invalid FHIR data (e.g., incorrect gender or date format) results in:
+	•	Validation failure
+	•	Request rejection (HTTP 500 in current phase)
+
+This confirms that only standards-compliant data proceeds further.
+
+⸻
+
+6. Hospital B – Internal Data Model
+
+Hospital B uses a different legacy schema, independent of Hospital A.
+
+{
+  "uhid": "B998",
+  "fullName": "Siddhesh Abhang",
+  "dateOfBirth": "19th Aug 2003",
+  "gender": "Male"
+}
+
+Characteristics
+	•	Hospital-specific identifier (uhid)
+	•	Human-readable date format
+	•	Full gender string
+
+⸻
+
+7. Conversion: FHIR → Hospital B
+
+Hospital B receives FHIR JSON, parses it, and converts it to its internal format.
+
+Key Transformations
+
+FHIR	Hospital B
+Patient.id	Generated uhid
+HumanName.text	fullName
+birthDate	19th Aug 2003
+gender = male	gender = Male
+
+FHIR is not stored permanently.
+
+⸻
+
+8. End-to-End Flow Summary
+	1.	Hospital A submits legacy JSON
+	2.	Data is converted to FHIR Patient
+	3.	FHIR validation is performed
+	4.	Valid FHIR is sent to Hospital B
+	5.	Hospital B converts FHIR to its own schema
+
+This demonstrates true interoperability without tight coupling.
+
+⸻
+
+9. Key Takeaways
+	•	FHIR is used strictly as an exchange standard
+	•	Hospitals retain autonomy over internal schemas
+	•	Validation ensures data safety and compliance
+	•	Architecture aligns with real-world healthcare interoperability systems
+
+⸻
+
+10. Phase 1 Conclusion
+
+Phase 1 successfully demonstrates:
+	•	Multi-hospital interoperability
+	•	Schema heterogeneity handling
+	•	Standards-based data exchange
+	•	Validation-driven safety
+
+This phase forms a strong foundation for extending the system in Phase 2 (Bundles, multiple resources, or real transfer workflows).

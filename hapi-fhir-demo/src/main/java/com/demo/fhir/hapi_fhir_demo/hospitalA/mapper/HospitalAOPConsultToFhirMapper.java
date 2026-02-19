@@ -11,7 +11,7 @@ public class HospitalAOPConsultToFhirMapper {
         patient.setId(dto.getPatientId());
 
         Encounter encounter = new Encounter();
-        encounter.setStatus(Encounter.EncounterStatus.FINISHED);
+//        encounter.setStatus(Encounter.EncounterStatus.FINISHED);
         encounter.setClass_(
                 new Coding()
                         .setSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode")
@@ -24,6 +24,7 @@ public class HospitalAOPConsultToFhirMapper {
         );
 
         Observation temperatureObs = new Observation();
+        temperatureObs.setStatus(Observation.ObservationStatus.FINAL);
         temperatureObs.setCode(
                 new CodeableConcept().addCoding(
                         new Coding()

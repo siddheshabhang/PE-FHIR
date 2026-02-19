@@ -1,8 +1,12 @@
 package com.demo.fhir.hapi_fhir_demo.hospitalB;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.parser.IParser;
+import com.demo.fhir.hapi_fhir_demo.hospitalB.Dto.HospitalBOPConsultRecordDTO;
 import com.demo.fhir.hapi_fhir_demo.hospitalB.mapper.FHIRToHospitalBMapper;
+import com.demo.fhir.hapi_fhir_demo.hospitalB.mapper.FhirBundleToHospitalBMapper;
 import com.demo.fhir.hapi_fhir_demo.hospitalB.model.HospitalBPatient;
+import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,4 +24,13 @@ public class HospitalBController {
         // Convert to Hospital-B format
         return FHIRToHospitalBMapper.mapToHospitalB(patient);
     }
+
+    @PostMapping("/op-consult")
+    public HospitalBOPConsultRecordDTO receiveFhirBundle(
+            @RequestBody String fhirJson) {
+        IParser parser = ctx.newJsonParser();
+        Bundle bundle = parser.parseResource(Bundle.class, fhirJson);
+        return FhirBundleToHospitalBMapper.map(bundle);
+    }
+
 }

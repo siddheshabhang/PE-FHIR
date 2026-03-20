@@ -8,8 +8,10 @@ import java.util.Base64;
 
 public class FhirBundleToHospitalBMapper {
     public static HospitalBOPConsultRecordDTO map(Bundle bundle) {
+
         HospitalBOPConsultRecordDTO dto = new HospitalBOPConsultRecordDTO();
         HospitalBOPConsultRecordDTO.Vitals vitals = new HospitalBOPConsultRecordDTO.Vitals();
+
         for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
             Resource resource = entry.getResource();
 
@@ -18,9 +20,9 @@ public class FhirBundleToHospitalBMapper {
                 dto.setUhid("B-" + patient.getId());
                 if (!patient.getName().isEmpty()) {
                     HumanName name = patient.getNameFirstRep();
-                    String firstName = name.getGivenAsSingleString();
-                    String lastName = name.getFamily();
-                    dto.setPatientName(firstName + " " + lastName);
+                    dto.setPatientName(
+                            name.getGivenAsSingleString() + " " + name.getFamily()
+                    );
                 }
             }
 
@@ -33,28 +35,46 @@ public class FhirBundleToHospitalBMapper {
 
             // ── Encounter ────────────────────────────────────────────────────
             if (resource instanceof Encounter encounter) {
-                if (encounter.getPeriod() != null && encounter.getPeriod().getStart() != null) {
+                if (encounter.getPeriod() != null
+                        && encounter.getPeriod().getStart() != null) {
                     SimpleDateFormat sdf = new SimpleDateFormat("dd MMM yyyy");
                     dto.setConsultDate(sdf.format(encounter.getPeriod().getStart()));
                 }
             }
 
-            // ── Observations (vitals + symptoms) ─────────────────────────────
+            // ── Observations ─────────────────────────────────────────────────
             if (resource instanceof Observation obs) {
                 if (obs.getCode() != null && !obs.getCode().getCoding().isEmpty()) {
                     String code = obs.getCode().getCodingFirstRep().getCode();
 
-                    if ("8310-5".equals(code)) {                    // Temperature
+                    // Temperature
+                    if ("8310-5".equals(code)) {
                         if (obs.getValue() instanceof Quantity q) {
                             vitals.setTemp(q.getValue() + " " + q.getUnit());
                         }
                     }
-                    if ("85354-9".equals(code)) {                   // Blood Pressure
-                        if (obs.getValue() instanceof StringType s) {
-                            vitals.setBp(s.getValue());
+                    if ("85354-9".equals(code)) {
+                        StringBuilder bp = new StringBuilder();
+                        for (Observation.ObservationComponentComponent component
+                                : obs.getComponent()) {
+
+                            String compCode = component.getCode()
+                                    .getCodingFirstRep().getCode();
+
+                            if ("8480-6".equals(compCode)
+                                    && component.getValue() instanceof Quantity q) {
+                                bp.append(q.getValue().intValue()); // systolic first
+                            }
+                            if ("8462-4".equals(compCode)
+                                    && component.getValue() instanceof Quantity q) {
+                                bp.append("/").append(q.getValue().intValue());
+                            }
                         }
+                        vitals.setBp(bp.toString());
                     }
-                    if ("75325-1".equals(code)) {                   // Symptoms
+
+                    // Symptoms
+                    if ("75325-1".equals(code)) {
                         if (obs.getValue() instanceof StringType s) {
                             dto.setClinicalNotes(s.getValue());
                         }
@@ -62,28 +82,38 @@ public class FhirBundleToHospitalBMapper {
                 }
             }
 
-            // ── DocumentReference (PDF extraction) ───────────────────────────
-            // Hospital B checks every Bundle entry for a DocumentReference.
-            // If found, it reads the raw byte[] from the attachment and
-            // re-encodes it to Base64 so Hospital B's DTO can carry it.
-            // Hospital B can then decode this string to reconstruct the PDF file.
+            // ── DocumentReference — PDF extraction ───────────────────────────
             if (resource instanceof DocumentReference docRef) {
                 if (docRef.getContentFirstRep() != null
                         && docRef.getContentFirstRep().getAttachment() != null) {
-
                     byte[] pdfBytes = docRef.getContentFirstRep()
-                            .getAttachment()
-                            .getData();
-
+                            .getAttachment().getData();
                     if (pdfBytes != null) {
-                        // byte[] → Base64 String (so DTO can carry it as JSON)
-                        String base64Pdf = Base64.getEncoder().encodeToString(pdfBytes);
-                        dto.setPrescriptionPdfBase64(base64Pdf);
+                        dto.setPrescriptionPdfBase64(
+                                Base64.getEncoder().encodeToString(pdfBytes)
+                        );
                     }
                 }
             }
-        }
 
+            // ── Consent verification ─────────────────────────────────────────
+            // Hospital B independently verifies that a valid Consent exists
+            // inside the received Bundle before trusting the data.
+            // If consent is missing or not ACTIVE + PERMIT, we flag it.
+            if (resource instanceof Consent consent) {
+                boolean isActive = Consent.ConsentState.ACTIVE
+                        .equals(consent.getStatus());
+                boolean isPermit = consent.getProvision() != null
+                        && Consent.ConsentProvisionType.PERMIT
+                        .equals(consent.getProvision().getType());
+
+                if (isActive && isPermit) {
+                    dto.setConsentVerified(true);
+                } else {
+                    dto.setConsentVerified(false);
+                }
+            }
+        }
         dto.setVitals(vitals);
         return dto;
     }

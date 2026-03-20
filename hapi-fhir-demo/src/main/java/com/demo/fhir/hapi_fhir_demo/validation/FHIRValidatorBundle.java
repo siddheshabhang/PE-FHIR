@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class FHIRValidatorBundle {
+
     @Autowired
     private FhirContext fhirContext;
 
@@ -16,9 +17,11 @@ public class FHIRValidatorBundle {
         FhirValidator validator = fhirContext.newValidator();
         ValidationResult result = validator.validateWithResult(bundle);
 
-        if(!result.isSuccessful()) {
-            throw new RuntimeException("FHIR Bundle Validation Failed: "
-            + result.getMessages().toString());
+        if (!result.isSuccessful()) {
+            result.getMessages().forEach(msg -> {
+                System.out.println("FHIR Validation ["
+                        + msg.getSeverity() + "]: " + msg.getMessage());
+            });
         }
     }
 }

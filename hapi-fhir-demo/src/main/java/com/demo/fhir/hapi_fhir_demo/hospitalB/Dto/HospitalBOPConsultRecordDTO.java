@@ -10,7 +10,9 @@ public class HospitalBOPConsultRecordDTO {
     private String doctor;
     private String clinicalNotes;
     private Vitals vitals;
+
     private String prescriptionPdfBase64;
+    private boolean consentVerified;
 
     @Data
     public static class Vitals {

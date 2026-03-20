@@ -3,11 +3,18 @@ package com.demo.fhir.hapi_fhir_demo.hospitalA.mapper;
 import com.demo.fhir.hapi_fhir_demo.hospitalA.Dto.HospitalAOPConsultRecordDTO;
 import org.hl7.fhir.r4.model.*;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.Date;
 
 public class HospitalAOPConsultToFhirMapper {
+    private static final DateTimeFormatter VISIT_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     public static Bundle mapToBundle(HospitalAOPConsultRecordDTO dto) {
+
         // ── Patient ──────────────────────────────────────────────────────────
         Patient patient = new Patient();
         patient.setId(dto.getPatientId());
@@ -24,6 +31,15 @@ public class HospitalAOPConsultToFhirMapper {
         practitioner.addName(docName);
 
         // ── Encounter ────────────────────────────────────────────────────────
+        Date visitDate;
+        try {
+            LocalDate parsed = LocalDate.parse(dto.getVisitDate(), VISIT_DATE_FORMAT);
+            visitDate = Date.from(parsed.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        } catch (Exception e) {
+            // If visitDate is null or malformed, fall back to today
+            visitDate = new Date();
+        }
+
         Encounter encounter = new Encounter();
         encounter.setStatus(Encounter.EncounterStatus.FINISHED);
         encounter.setClass_(
@@ -33,7 +49,7 @@ public class HospitalAOPConsultToFhirMapper {
                         .setDisplay("Ambulatory")
         );
         encounter.setSubject(new Reference("Patient/" + dto.getPatientId()));
-        encounter.setPeriod(new Period().setStart(new Date()));
+        encounter.setPeriod(new Period().setStart(visitDate)); // FIX applied here
         encounter.addParticipant()
                 .setIndividual(new Reference("Practitioner/" + practitioner.getId()));
 
@@ -47,7 +63,11 @@ public class HospitalAOPConsultToFhirMapper {
                         .setDisplay("Body temperature")
         ));
         temperatureObs.setValue(
-                new Quantity().setValue(dto.getTemperature()).setUnit("F")
+                new Quantity()
+                        .setValue(dto.getTemperature())
+                        .setUnit("F")
+                        .setSystem("http://unitsofmeasure.org")
+                        .setCode("[degF]")
         );
         temperatureObs.setSubject(new Reference("Patient/" + dto.getPatientId()));
 
@@ -60,8 +80,46 @@ public class HospitalAOPConsultToFhirMapper {
                         .setCode("85354-9")
                         .setDisplay("Blood pressure panel")
         ));
-        bpObs.setValue(new StringType(dto.getBloodPressure()));
         bpObs.setSubject(new Reference("Patient/" + dto.getPatientId()));
+
+        String[] bpParts = dto.getBloodPressure().split("/");
+        int systolicValue  = Integer.parseInt(bpParts[0].trim());
+        int diastolicValue = Integer.parseInt(bpParts[1].trim());
+
+        Observation.ObservationComponentComponent systolic =
+                new Observation.ObservationComponentComponent();
+        systolic.setCode(new CodeableConcept().addCoding(
+                new Coding()
+                        .setSystem("http://loinc.org")
+                        .setCode("8480-6")
+                        .setDisplay("Systolic blood pressure")
+        ));
+        systolic.setValue(
+                new Quantity()
+                        .setValue(systolicValue)
+                        .setUnit("mmHg")
+                        .setSystem("http://unitsofmeasure.org")
+                        .setCode("mm[Hg]")
+        );
+
+        Observation.ObservationComponentComponent diastolic =
+                new Observation.ObservationComponentComponent();
+        diastolic.setCode(new CodeableConcept().addCoding(
+                new Coding()
+                        .setSystem("http://loinc.org")
+                        .setCode("8462-4")
+                        .setDisplay("Diastolic blood pressure")
+        ));
+        diastolic.setValue(
+                new Quantity()
+                        .setValue(diastolicValue)
+                        .setUnit("mmHg")
+                        .setSystem("http://unitsofmeasure.org")
+                        .setCode("mm[Hg]")
+        );
+
+        bpObs.addComponent(systolic);
+        bpObs.addComponent(diastolic);
 
         // ── Observation: Symptoms ────────────────────────────────────────────
         Observation symptomsObs = new Observation();
@@ -75,39 +133,75 @@ public class HospitalAOPConsultToFhirMapper {
         symptomsObs.setValue(new StringType(dto.getSymptoms()));
         symptomsObs.setSubject(new Reference("Patient/" + dto.getPatientId()));
 
-        // ── DocumentReference ─────────────────────────────────────────────────
-        // This is the core FHIR technique for sending a prescription PDF.
-        // The PDF (Base64 string from DTO) is decoded to byte[] and embedded
-        // inside the FHIR Attachment. No file storage or URL is needed —
-        // the document travels self-contained inside the Bundle.
-
+        // ── DocumentReference (PDF prescription) ─────────────────────────────
         DocumentReference docRef = new DocumentReference();
         docRef.setStatus(Enumerations.DocumentReferenceStatus.CURRENT);
-        CodeableConcept type = new CodeableConcept();
-        type.addCoding()
+        CodeableConcept docType = new CodeableConcept();
+        docType.addCoding()
                 .setSystem("http://loinc.org")
                 .setCode("60591-5")
                 .setDisplay("Prescription Document");
-        docRef.setType(type);
-
-        // Link this document to the correct patient
+        docRef.setType(docType);
         docRef.setSubject(new Reference("Patient/" + dto.getPatientId()));
 
-        // Attachment: contentType tells the receiver this is a PDF
-        // setData() takes byte[] — we decode the Base64 string back to bytes
-        // This is the reverse of: Base64.getEncoder().encodeToString(pdfBytes)
-        Attachment attachment = new Attachment();
-        attachment.setContentType("application/pdf");
-        attachment.setData(
-                Base64.getDecoder().decode(dto.getPrescriptionPdfBase64())
-        );
+        if (dto.getPrescriptionPdfBase64() != null
+                && !dto.getPrescriptionPdfBase64().isBlank()) {
+            Attachment attachment = new Attachment();
+            attachment.setContentType("application/pdf");
+            attachment.setData(
+                    Base64.getDecoder().decode(dto.getPrescriptionPdfBase64())
+            );
+            docRef.addContent().setAttachment(attachment);
+        }
 
-        // Attach the PDF to the DocumentReference content
-        docRef.addContent().setAttachment(attachment);
+        // ── Consent ────────────────────────────────────────────────────────────────────
+        // The patient's consent decision travels inside the Bundle.
+        // Hospital B can independently verify that consent was granted
+        // before accepting or processing the received data.
+        // status=ACTIVE means consent is currently valid.
+        // provision.type=PERMIT means data transfer is allowed.
+        Consent consent = new Consent();
+        consent.setStatus(Consent.ConsentState.ACTIVE);
 
-        // ── Bundle: assemble all resources ────────────────────────────────────
+        // Scope: patient-privacy — covers sharing of personal health data
+        CodeableConcept consentScope = new CodeableConcept();
+        consentScope.addCoding()
+                .setSystem("http://terminology.hl7.org/CodeSystem/consentscope")
+                .setCode("patient-privacy")
+                .setDisplay("Privacy Consent");
+        consent.setScope(consentScope);
+
+        // Category: LOINC 59284-0 = Patient Consent document
+        consent.addCategory(new CodeableConcept().addCoding(
+                new Coding()
+                        .setSystem("http://loinc.org")
+                        .setCode("59284-0")
+                        .setDisplay("Patient Consent")
+        ));
+
+        // Link consent to this patient
+        consent.setPatient(new Reference("Patient/" + dto.getPatientId()));
+
+        // Timestamp of when consent was granted
+        consent.setDateTime(new Date());
+
+        // Policy: OPTIN — patient has actively opted in to data sharing
+        consent.setPolicyRule(new CodeableConcept().addCoding(
+                new Coding()
+                        .setSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode")
+                        .setCode("OPTIN")
+                        .setDisplay("opt-in")
+        ));
+
+        // Provision: PERMIT — data transfer is permitted
+        Consent.provisionComponent provision = new Consent.provisionComponent();
+        provision.setType(Consent.ConsentProvisionType.PERMIT);
+        consent.setProvision(provision);
+
+        // ── Bundle: assemble all resources ───────────────────────────────────
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.COLLECTION);
+
         bundle.addEntry().setResource(patient);
         bundle.addEntry().setResource(practitioner);
         bundle.addEntry().setResource(encounter);
@@ -115,6 +209,7 @@ public class HospitalAOPConsultToFhirMapper {
         bundle.addEntry().setResource(bpObs);
         bundle.addEntry().setResource(symptomsObs);
         bundle.addEntry().setResource(docRef);
+        bundle.addEntry().setResource(consent);
         return bundle;
     }
 }

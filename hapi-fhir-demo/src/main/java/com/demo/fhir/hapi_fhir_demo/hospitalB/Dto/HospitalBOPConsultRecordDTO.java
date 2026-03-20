@@ -10,25 +10,11 @@ public class HospitalBOPConsultRecordDTO {
     private String doctor;
     private String clinicalNotes;
     private Vitals vitals;
+    private String prescriptionPdfBase64;
 
+    @Data
     public static class Vitals {
         private String bp;
         private String temp;
-
-        public String getBp() {
-            return bp;
-        }
-
-        public void setBp(String bp) {
-            this.bp = bp;
-        }
-
-        public String getTemp() {
-            return temp;
-        }
-
-        public void setTemp(String temp) {
-            this.temp = temp;
-        }
     }
 }

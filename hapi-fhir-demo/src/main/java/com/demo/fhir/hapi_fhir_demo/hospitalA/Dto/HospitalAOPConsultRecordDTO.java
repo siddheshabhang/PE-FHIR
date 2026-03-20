@@ -12,4 +12,5 @@ public class HospitalAOPConsultRecordDTO {
     private String symptoms;
     private double temperature;
     private String bloodPressure;
+    private String prescriptionPdfBase64;
 }

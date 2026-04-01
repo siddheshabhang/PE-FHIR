@@ -30,6 +30,14 @@ public class AppUser {
     @Column
     private String patientId;
 
+    /**
+     * Bcrypt hash of the last issued refresh token.
+     * Cleared on logout; replaced on every /auth/refresh call.
+     * Null means no active session.
+     */
+    @Column
+    private String refreshTokenHash;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

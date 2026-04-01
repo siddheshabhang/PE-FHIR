@@ -74,20 +74,21 @@ public class AuthService {
 
     @Transactional
     public String refresh(String rawRefreshToken) {
-        // Parse to get username — throws JwtException if expired/invalid
-        var claims  = jwtUtil.parse(rawRefreshToken);
+        var claims = jwtUtil.parse(rawRefreshToken);
         String type = claims.get("type", String.class);
         if (!"refresh".equals(type)) {
             throw new IllegalArgumentException("Not a refresh token");
         }
 
         String username = claims.getSubject();
+        String jti = claims.get("jti", String.class); // ✅ extract jti
+
         AppUser user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        // Verify the hashed token matches what we stored
+        // ✅ FIX: compare against jti hash, not raw token
         if (user.getRefreshTokenHash() == null
-                || !passwordEncoder.matches(rawRefreshToken, user.getRefreshTokenHash())) {
+                || !passwordEncoder.matches(jti, user.getRefreshTokenHash())) {
             throw new IllegalArgumentException("Refresh token has been invalidated");
         }
 
@@ -115,8 +116,8 @@ public class AuthService {
                 "type", "refresh"
         );
         String rawToken = jwtUtil.sign(claims, refreshTokenExpiry);
-        // Store the hash — never store the raw token in the DB
-        user.setRefreshTokenHash(passwordEncoder.encode(rawToken));
+        // ✅ FIX: hash only the jti (UUID), not the full JWT — BCrypt has a 72-byte limit
+        user.setRefreshTokenHash(passwordEncoder.encode(jti));
         userRepository.save(user);
         return rawToken;
     }

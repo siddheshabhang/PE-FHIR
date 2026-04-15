@@ -45,6 +45,8 @@ public class SecurityConfig {
                 // ── Consent endpoints — ADMIN or PATIENT only ───────────────
                 .requestMatchers(HttpMethod.POST, "/consent/**")
                     .hasAnyRole("ADMIN", "PATIENT")
+                .requestMatchers(HttpMethod.GET, "/consent/pending/**")
+                    .hasAnyRole("ADMIN", "PATIENT")
 
                 // ── Hospital A endpoints — ADMIN or DOCTOR only ─────────────
                 .requestMatchers(HttpMethod.POST, "/hospitalA/**")

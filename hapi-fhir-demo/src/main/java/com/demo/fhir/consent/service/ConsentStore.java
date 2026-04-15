@@ -1,94 +1,137 @@
 package com.demo.fhir.consent.service;
 
+import com.demo.fhir.consent.dto.ConsentDecisionDTO;
+import com.demo.fhir.consent.dto.ConsentRequestViewDTO;
+import com.demo.fhir.consent.dto.InitiateConsentDTO;
 import com.demo.fhir.consent.model.ConsentAction;
 import com.demo.fhir.consent.model.ConsentAuditLog;
-import com.demo.fhir.consent.model.ConsentPreference;
+import com.demo.fhir.consent.model.ConsentRequestEntity;
 import com.demo.fhir.consent.model.ConsentStatus;
 import com.demo.fhir.consent.repository.ConsentAuditLogRepository;
-import com.demo.fhir.consent.repository.ConsentPreferenceRepository;
+import com.demo.fhir.consent.repository.ConsentRequestRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
-@Component
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
 public class ConsentStore {
 
     @Autowired
-    private ConsentPreferenceRepository preferenceRepository;
+    private ConsentRequestRepository requestRepository;
 
     @Autowired
     private ConsentAuditLogRepository auditLogRepository;
 
-    // ── Public API (unchanged — callers require no modification) ─────────────
+    // ── Public API ───────────────────────────────────────────────────────────
 
     @Transactional
-    public void store(String patientId, ConsentStatus status) {
-        ConsentPreference pref = preferenceRepository.findByPatientId(patientId)
-                .orElseGet(() -> {
-                    ConsentPreference newPref = new ConsentPreference();
-                    newPref.setPatientId(patientId);
-                    return newPref;
-                });
+    public ConsentRequestViewDTO initiateRequest(InitiateConsentDTO dto, String requesterId) {
+        ConsentRequestEntity request = new ConsentRequestEntity();
+        request.setPatientId(dto.getPatientId());
+        request.setRequesterId(requesterId);
+        request.setPurpose(dto.getPurpose());
+        request.setStatus(ConsentStatus.PENDING);
 
-        boolean isNew = (pref.getId() == null);
-        pref.setConsentStatus(status);
-        preferenceRepository.save(pref);
-
-        // Append audit entry — GRANTED on first store, MODIFIED on subsequent
-        ConsentAction action = isNew ? ConsentAction.GRANTED : ConsentAction.MODIFIED;
-        appendAudit(patientId, action, buildSnapshot(pref));
+        ConsentRequestEntity saved = requestRepository.save(request);
+        appendAudit(saved, ConsentAction.INITIATED);
+        return mapToDTO(saved);
     }
 
     @Transactional(readOnly = true)
-    public boolean hasConsent(String patientId) {
-        return preferenceRepository.findByPatientId(patientId)
-                .map(p -> ConsentStatus.GRANTED.equals(p.getConsentStatus()))
-                .orElse(false);
-    }
-
-    @Transactional(readOnly = true)
-    public ConsentStatus getStatus(String patientId) {
-        return preferenceRepository.findByPatientId(patientId)
-                .map(ConsentPreference::getConsentStatus)
-                .orElse(null);
+    public List<ConsentRequestViewDTO> getPendingRequests(String patientId) {
+        return requestRepository.findByPatientIdAndStatus(patientId, ConsentStatus.PENDING)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
     }
 
     @Transactional
-    public void revoke(String patientId) {
-        ConsentPreference pref = preferenceRepository.findByPatientId(patientId)
-                .orElseGet(() -> {
-                    ConsentPreference newPref = new ConsentPreference();
-                    newPref.setPatientId(patientId);
-                    return newPref;
-                });
-        pref.setConsentStatus(ConsentStatus.DENIED);
-        preferenceRepository.save(pref);
-        appendAudit(patientId, ConsentAction.REVOKED, buildSnapshot(pref));
+    public ConsentRequestViewDTO processDecision(Long requestId, String patientId, ConsentDecisionDTO dto) {
+        ConsentRequestEntity request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found"));
+
+        if (!request.getPatientId().equals(patientId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized to respond to this request");
+        }
+
+        if (request.getStatus() != ConsentStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request is already processed");
+        }
+
+        request.setStatus(dto.getDecision());
+        ConsentRequestEntity saved = requestRepository.save(request);
+
+        ConsentAction action = dto.getDecision() == ConsentStatus.GRANTED ? ConsentAction.GRANTED : ConsentAction.DENIED;
+        appendAudit(saved, action);
+
+        return mapToDTO(saved);
+    }
+
+    @Transactional
+    public void revoke(Long requestId, String patientId) {
+        ConsentRequestEntity request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found"));
+                
+        if (!request.getPatientId().equals(patientId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized to revoke this request");
+        }
+
+        request.setStatus(ConsentStatus.REVOKED);
+        ConsentRequestEntity saved = requestRepository.save(request);
+        appendAudit(saved, ConsentAction.REVOKED);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasActiveConsent(String patientId, String requesterId) {
+        List<ConsentRequestEntity> grantedReqs = requestRepository.findByPatientIdAndRequesterIdAndStatus(patientId, requesterId, ConsentStatus.GRANTED);
+        return !grantedReqs.isEmpty();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private void appendAudit(String patientId, ConsentAction action, String snapshot) {
+    private void appendAudit(ConsentRequestEntity request, ConsentAction action) {
         ConsentAuditLog log = new ConsentAuditLog();
-        log.setPatientId(patientId);
+        log.setPatientId(request.getPatientId());
         log.setAction(action);
-        log.setChangedBy("system");   // TODO Phase 3: replace with authenticated user
-        log.setPreferencesSnapshot(snapshot);
+        log.setChangedBy(getCurrentUsername());
+        log.setPreferencesSnapshot(buildRequestSnapshot(request));
         auditLogRepository.save(log);
     }
 
-    private String buildSnapshot(ConsentPreference pref) {
+    private String getCurrentUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getName() != null) {
+            return auth.getName();
+        }
+        return "system"; // fallback
+    }
+
+    private String buildRequestSnapshot(ConsentRequestEntity req) {
         return String.format(
-                "{\"status\":\"%s\",\"shareWithHospitalB\":%b,\"shareDiagnostics\":%b," +
-                "\"shareMedications\":%b,\"shareLabResults\":%b," +
-                "\"shareSurgicalHistory\":%b,\"shareAllergies\":%b}",
-                pref.getConsentStatus(),
-                pref.isShareWithHospitalB(),
-                pref.isShareDiagnostics(),
-                pref.isShareMedications(),
-                pref.isShareLabResults(),
-                pref.isShareSurgicalHistory(),
-                pref.isShareAllergies()
+                "{\"requestId\":%d,\"requesterId\":\"%s\",\"purpose\":\"%s\",\"status\":\"%s\"}",
+                req.getId(),
+                req.getRequesterId(),
+                req.getPurpose(),
+                req.getStatus()
         );
+    }
+
+    private ConsentRequestViewDTO mapToDTO(ConsentRequestEntity entity) {
+        ConsentRequestViewDTO dto = new ConsentRequestViewDTO();
+        dto.setId(entity.getId());
+        dto.setPatientId(entity.getPatientId());
+        dto.setRequesterId(entity.getRequesterId());
+        dto.setPurpose(entity.getPurpose());
+        dto.setStatus(entity.getStatus());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setUpdatedAt(entity.getUpdatedAt());
+        return dto;
     }
 }

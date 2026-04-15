@@ -14,6 +14,8 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -44,21 +46,18 @@ public class HospitalAController {
     // ── OP Consult with consent guard ────────────────────────────────────────
     @PostMapping("/op-consult")
     public String receiveOPConsult(@RequestBody HospitalAOPConsultRecordDTO consultRecord) {
+        
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String requesterId = (auth != null && auth.getName() != null) ? auth.getName() : "system";
 
         // CONSENT GUARD — must be the very first check
         // TODO Phase 3: replace with ConsentService interface
-        if (!consentStore.hasConsent(consultRecord.getPatientId())) {
+        if (!consentStore.hasActiveConsent(consultRecord.getPatientId(), requesterId)) {
 
-            ConsentStatus currentStatus =
-                    consentStore.getStatus(consultRecord.getPatientId());
-
-            String reason = (currentStatus == null)
-                    ? "No consent record found for patient: "
+            String reason = "No active GRANTED consent request found for patient: "
                     + consultRecord.getPatientId()
-                    + ". Call POST /consent first."
-                    : "Consent was explicitly DENIED for patient: "
-                    + consultRecord.getPatientId()
-                    + ". Data transfer is blocked.";
+                    + " and requester: " + requesterId
+                    + ". Call POST /consent/initiate first and wait for patient approval.";
 
             // 403 FORBIDDEN — not 500, because this is an intentional business rule
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, reason);

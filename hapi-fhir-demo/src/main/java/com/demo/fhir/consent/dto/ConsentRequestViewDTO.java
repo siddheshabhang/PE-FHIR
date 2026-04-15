@@ -3,6 +3,7 @@ package com.demo.fhir.consent.dto;
 import com.demo.fhir.consent.model.ConsentStatus;
 import lombok.Data;
 import java.time.Instant;
+import java.util.Set;
 
 @Data
 public class ConsentRequestViewDTO {
@@ -11,6 +12,8 @@ public class ConsentRequestViewDTO {
     private String requesterId;
     private String purpose;
     private ConsentStatus status;
+    private Set<String> requestedDataTypes;
+    private Set<String> grantedDataTypes;
     private Instant createdAt;
     private Instant updatedAt;
 }

@@ -51,9 +51,9 @@ public class HospitalAController {
         String requesterId = (auth != null && auth.getName() != null) ? auth.getName() : "system";
 
         // CONSENT GUARD — must be the very first check
-        // TODO Phase 3: replace with ConsentService interface
-        if (!consentStore.hasActiveConsent(consultRecord.getPatientId(), requesterId)) {
-
+        java.util.Set<String> grantedTypes = consentStore.getActiveGrantedDataTypes(consultRecord.getPatientId(), requesterId);
+        
+        if (grantedTypes.isEmpty()) {
             String reason = "No active GRANTED consent request found for patient: "
                     + consultRecord.getPatientId()
                     + " and requester: " + requesterId
@@ -65,9 +65,53 @@ public class HospitalAController {
 
         // Consent is GRANTED — proceed with mapping and transfer
         Bundle bundle = HospitalAOPConsultToFhirMapper.mapToBundle(consultRecord);
+        
+        // Apply Fine-Grained Data Privacy Stripping
+        filterBundleByConsent(bundle, grantedTypes);
+
         bundleValidator.validate(bundle);
 
         IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
         return parser.encodeResourceToString(bundle);
+    }
+
+    // ── Granular Data Stripping Helper ───────────────────────────────────────
+    private void filterBundleByConsent(Bundle bundle, java.util.Set<String> grantedDataTypes) {
+        java.util.Set<String> allowedResourceTypes = new java.util.HashSet<>();
+        
+        // Base critical objects are usually shared by default in summary packets
+        allowedResourceTypes.add("Patient");
+        allowedResourceTypes.add("Encounter");
+
+        if (grantedDataTypes.contains("Medications")) {
+            allowedResourceTypes.add("Medication");
+            allowedResourceTypes.add("MedicationRequest");
+            allowedResourceTypes.add("MedicationStatement");
+        }
+        if (grantedDataTypes.contains("Diagnostics")) {
+            allowedResourceTypes.add("DiagnosticReport");
+            allowedResourceTypes.add("Observation");
+        }
+        if (grantedDataTypes.contains("LabResults")) {
+            allowedResourceTypes.add("Observation"); 
+        }
+        if (grantedDataTypes.contains("SurgicalHistory")) {
+            allowedResourceTypes.add("Procedure");
+        }
+        if (grantedDataTypes.contains("Allergies")) {
+            allowedResourceTypes.add("AllergyIntolerance");
+        }
+
+        // Safely iterate and remove unauthorized elements
+        java.util.Iterator<Bundle.BundleEntryComponent> iterator = bundle.getEntry().iterator();
+        while (iterator.hasNext()) {
+            Bundle.BundleEntryComponent entry = iterator.next();
+            if (entry.getResource() != null) {
+                String resourceType = entry.getResource().getResourceType().name();
+                if (!allowedResourceTypes.contains(resourceType)) {
+                    iterator.remove(); // Strip it off
+                }
+            }
+        }
     }
 }

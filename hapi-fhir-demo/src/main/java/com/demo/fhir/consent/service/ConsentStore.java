@@ -17,7 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +40,8 @@ public class ConsentStore {
         request.setRequesterId(requesterId);
         request.setPurpose(dto.getPurpose());
         request.setStatus(ConsentStatus.PENDING);
+        request.setRequestedDataTypes(dto.getRequestedDataTypes() != null ? new HashSet<>(dto.getRequestedDataTypes()) : new HashSet<>());
+        request.setGrantedDataTypes(new HashSet<>()); // nothing granted initially
 
         ConsentRequestEntity saved = requestRepository.save(request);
         appendAudit(saved, ConsentAction.INITIATED);
@@ -66,6 +70,17 @@ public class ConsentStore {
         }
 
         request.setStatus(dto.getDecision());
+        
+        if (dto.getDecision() == ConsentStatus.GRANTED && dto.getGrantedDataTypes() != null) {
+            // Optional: validate that granted is subset of requested
+            Set<String> safeGranted = dto.getGrantedDataTypes().stream()
+                    .filter(request.getRequestedDataTypes()::contains)
+                    .collect(Collectors.toSet());
+            request.setGrantedDataTypes(safeGranted);
+        } else {
+            request.getGrantedDataTypes().clear();
+        }
+
         ConsentRequestEntity saved = requestRepository.save(request);
 
         ConsentAction action = dto.getDecision() == ConsentStatus.GRANTED ? ConsentAction.GRANTED : ConsentAction.DENIED;
@@ -84,14 +99,21 @@ public class ConsentStore {
         }
 
         request.setStatus(ConsentStatus.REVOKED);
+        request.getGrantedDataTypes().clear(); // Clearing the granted data upon revocation
         ConsentRequestEntity saved = requestRepository.save(request);
         appendAudit(saved, ConsentAction.REVOKED);
     }
 
     @Transactional(readOnly = true)
-    public boolean hasActiveConsent(String patientId, String requesterId) {
+    public Set<String> getActiveGrantedDataTypes(String patientId, String requesterId) {
         List<ConsentRequestEntity> grantedReqs = requestRepository.findByPatientIdAndRequesterIdAndStatus(patientId, requesterId, ConsentStatus.GRANTED);
-        return !grantedReqs.isEmpty();
+        Set<String> activeTypes = new HashSet<>();
+        for (ConsentRequestEntity req : grantedReqs) {
+            if (req.getGrantedDataTypes() != null) {
+                activeTypes.addAll(req.getGrantedDataTypes());
+            }
+        }
+        return activeTypes;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -115,11 +137,13 @@ public class ConsentStore {
 
     private String buildRequestSnapshot(ConsentRequestEntity req) {
         return String.format(
-                "{\"requestId\":%d,\"requesterId\":\"%s\",\"purpose\":\"%s\",\"status\":\"%s\"}",
+                "{\"requestId\":%d,\"requesterId\":\"%s\",\"purpose\":\"%s\",\"status\":\"%s\",\"requested\":%s,\"granted\":%s}",
                 req.getId(),
                 req.getRequesterId(),
                 req.getPurpose(),
-                req.getStatus()
+                req.getStatus(),
+                req.getRequestedDataTypes() != null ? req.getRequestedDataTypes().toString() : "[]",
+                req.getGrantedDataTypes() != null ? req.getGrantedDataTypes().toString() : "[]"
         );
     }
 
@@ -130,6 +154,8 @@ public class ConsentStore {
         dto.setRequesterId(entity.getRequesterId());
         dto.setPurpose(entity.getPurpose());
         dto.setStatus(entity.getStatus());
+        dto.setRequestedDataTypes(entity.getRequestedDataTypes() != null ? new HashSet<>(entity.getRequestedDataTypes()) : new HashSet<>());
+        dto.setGrantedDataTypes(entity.getGrantedDataTypes() != null ? new HashSet<>(entity.getGrantedDataTypes()) : new HashSet<>());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

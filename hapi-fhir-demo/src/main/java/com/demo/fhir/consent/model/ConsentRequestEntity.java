@@ -6,6 +6,9 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
+import java.util.Set;
+import java.util.HashSet;
+
 @Entity
 @Table(name = "consent_requests")
 @Data
@@ -28,6 +31,16 @@ public class ConsentRequestEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ConsentStatus status;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "consent_requested_types", joinColumns = @JoinColumn(name = "request_id"))
+    @Column(name = "data_type")
+    private Set<String> requestedDataTypes = new HashSet<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "consent_granted_types", joinColumns = @JoinColumn(name = "request_id"))
+    @Column(name = "data_type")
+    private Set<String> grantedDataTypes = new HashSet<>();
 
     @Column(updatable = false)
     private Instant createdAt;

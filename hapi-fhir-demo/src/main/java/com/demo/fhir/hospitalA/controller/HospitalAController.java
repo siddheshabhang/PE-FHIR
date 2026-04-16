@@ -7,7 +7,10 @@ import com.demo.fhir.consent.service.ConsentStore;
 import com.demo.fhir.hospitalA.dto.HospitalAOPConsultRecordDTO;
 import com.demo.fhir.hospitalA.mapper.HospitalAOPConsultToFhirMapper;
 import com.demo.fhir.hospitalA.mapper.HospitalAToFHIRMapper;
+import com.demo.fhir.hospitalA.model.HospitalAOPConsultEntity;
 import com.demo.fhir.hospitalA.model.HospitalAPatient;
+import com.demo.fhir.hospitalA.repository.HospitalAOPConsultRepository;
+import com.demo.fhir.hospitalA.repository.HospitalAPatientRepository;
 import com.demo.fhir.shared.validation.FHIRValidatorBundle;
 import com.demo.fhir.shared.validation.FHIRValidatorUtil;
 import org.hl7.fhir.r4.model.Bundle;
@@ -32,9 +35,18 @@ public class HospitalAController {
     @Autowired
     private ConsentStore consentStore;
 
+    @Autowired
+    private HospitalAPatientRepository patientRepository;
+
+    @Autowired
+    private HospitalAOPConsultRepository consultRepository;
+
     // ── Patient to FHIR ──────────────────────────────────────────────────────
     @PostMapping("/patient/to-fhir")
     public String convertToFHIR(@RequestBody HospitalAPatient patient) {
+        // Persist local copy before sending out
+        patientRepository.save(patient);
+        
         Patient fhirPatient = HospitalAToFHIRMapper.mapToFHIRPatient(patient);
         FHIRValidatorUtil.validate(fhirPatient);
         return fhirContext
@@ -47,10 +59,24 @@ public class HospitalAController {
     @PostMapping("/op-consult")
     public String receiveOPConsult(@RequestBody HospitalAOPConsultRecordDTO consultRecord) {
         
+        // 1. Persist the OPD visit locally immediately
+        HospitalAOPConsultEntity entity = new HospitalAOPConsultEntity();
+        entity.setPatientId(consultRecord.getPatientId());
+        entity.setPatientFirstName(consultRecord.getPatientFirstName());
+        entity.setPatientLastName(consultRecord.getPatientLastName());
+        entity.setDoctorName(consultRecord.getDoctorName());
+        entity.setVisitDate(consultRecord.getVisitDate());
+        entity.setSymptoms(consultRecord.getSymptoms());
+        entity.setTemperature(consultRecord.getTemperature());
+        entity.setBloodPressure(consultRecord.getBloodPressure());
+        entity.setPrescriptionPdfBase64(consultRecord.getPrescriptionPdfBase64());
+        consultRepository.save(entity);
+
+        // 2. Consent check prior to generating FHIR payload
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String requesterId = (auth != null && auth.getName() != null) ? auth.getName() : "system";
 
-        // CONSENT GUARD — must be the very first check
+        // CONSENT GUARD — must be the very first check before Data Transfer
         java.util.Set<String> grantedTypes = consentStore.getActiveGrantedDataTypes(consultRecord.getPatientId(), requesterId);
         
         if (grantedTypes.isEmpty()) {
@@ -60,6 +86,7 @@ public class HospitalAController {
                     + ". Call POST /consent/initiate first and wait for patient approval.";
 
             // 403 FORBIDDEN — not 500, because this is an intentional business rule
+            // Note: the record was saved locally, but outward transfer was aborted.
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, reason);
         }
 

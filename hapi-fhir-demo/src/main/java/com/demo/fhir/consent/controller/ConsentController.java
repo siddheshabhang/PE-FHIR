@@ -26,6 +26,17 @@ public class ConsentController {
         return "system";
     }
 
+    private String getCurrentPatientId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getDetails() instanceof io.jsonwebtoken.Claims claims) {
+            String patientId = claims.get("patientId", String.class);
+            if (patientId != null) {
+                return patientId;
+            }
+        }
+        return getCurrentUsername();
+    }
+
     // ── Initiate consent request (Requester) ─────────────────────────────────
     @PostMapping("/initiate")
     public ConsentRequestViewDTO initiateConsent(@RequestBody InitiateConsentDTO initiateDTO) {
@@ -45,7 +56,7 @@ public class ConsentController {
     public ConsentRequestViewDTO respondToRequest(
             @PathVariable Long requestId,
             @RequestBody ConsentDecisionDTO decisionDTO) {
-        String patientId = getCurrentUsername(); // Deriving patient identity from auth context
+        String patientId = getCurrentPatientId(); // Deriving patient identity from auth context
         return consentStore.processDecision(requestId, patientId, decisionDTO);
     }
 
@@ -53,7 +64,7 @@ public class ConsentController {
     // Breaking Change: Replacing POST /consent/revoke/{patientId} with POST /consent/revoke/{requestId}
     @PostMapping("/revoke/{requestId}")
     public String revokeConsent(@PathVariable Long requestId) {
-        String patientId = getCurrentUsername();
+        String patientId = getCurrentPatientId();
         consentStore.revoke(requestId, patientId);
         return "Consent REVOKED for request ID: " + requestId;
     }

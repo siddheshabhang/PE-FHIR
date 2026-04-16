@@ -137,7 +137,7 @@ public class ConsentStore {
         log.setPatientId(request.getPatientId());
         log.setAction(action);
         log.setChangedBy(getCurrentUsername());
-        log.setPreferencesSnapshot(buildRequestSnapshot(request));
+        log.setRequestSnapshot(buildRequestSnapshot(request));
         auditLogRepository.save(log);
     }
 

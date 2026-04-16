@@ -42,6 +42,9 @@ public class HospitalAController {
     @Autowired
     private HospitalAOPConsultRepository consultRepository;
 
+    @Autowired
+    private com.demo.fhir.shared.audit.AuditService auditService;
+
     // ── Patient to FHIR ──────────────────────────────────────────────────────
     @PostMapping("/patient/to-fhir")
     public String convertToFHIR(@RequestBody HospitalAPatient patient) {
@@ -97,10 +100,25 @@ public class HospitalAController {
         // Apply Fine-Grained Data Privacy Stripping
         filterBundleByConsent(bundle, grantedTypes);
 
-        bundleValidator.validate(bundle);
+        Long auditId = auditService.logPending(
+                consultRecord.getPatientId(), 
+                "HospitalA", 
+                requesterId, 
+                bundle.getEntry().size(), 
+                grantedTypes.toString()
+        );
 
-        IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
-        return parser.encodeResourceToString(bundle);
+        try {
+            bundleValidator.validate(bundle);
+
+            IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
+            String payload = parser.encodeResourceToString(bundle);
+            auditService.markSuccess(auditId);
+            return payload;
+        } catch (Exception e) {
+            auditService.markFailed(auditId, e.getMessage());
+            throw e;
+        }
     }
 
     // ── Patient-Initiated Push Flow ──────────────────────────────────────────
@@ -112,6 +130,12 @@ public class HospitalAController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated request");
         }
         String patientId = auth.getName();
+        if (auth.getDetails() instanceof io.jsonwebtoken.Claims claims) {
+            String claimPatientId = claims.get("patientId", String.class);
+            if (claimPatientId != null) {
+                patientId = claimPatientId;
+            }
+        }
 
         // 2. Fetch the latest consult record for this patient
         HospitalAOPConsultEntity latestConsult = consultRepository.findFirstByPatientIdOrderByIdDesc(patientId)
@@ -137,10 +161,25 @@ public class HospitalAController {
         // 5. Apply Fine-Grained Data Privacy Stripping based on requested data types
         filterBundleByConsent(bundle, pushRequest.getDataTypes());
 
-        bundleValidator.validate(bundle);
+        Long auditId = auditService.logPending(
+                patientId, 
+                "HospitalA", 
+                pushRequest.getTargetRequesterId(), 
+                bundle.getEntry().size(), 
+                pushRequest.getDataTypes() != null ? pushRequest.getDataTypes().toString() : "[]"
+        );
 
-        IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
-        return parser.encodeResourceToString(bundle);
+        try {
+            bundleValidator.validate(bundle);
+
+            IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
+            String payload = parser.encodeResourceToString(bundle);
+            auditService.markSuccess(auditId);
+            return payload;
+        } catch (Exception e) {
+            auditService.markFailed(auditId, e.getMessage());
+            throw e;
+        }
     }
 
     // ── Granular Data Stripping Helper ───────────────────────────────────────
@@ -150,6 +189,9 @@ public class HospitalAController {
         // Base critical objects are usually shared by default in summary packets
         allowedResourceTypes.add("Patient");
         allowedResourceTypes.add("Encounter");
+        allowedResourceTypes.add("Practitioner");
+        allowedResourceTypes.add("DocumentReference");
+        allowedResourceTypes.add("Consent");
 
         if (grantedDataTypes.contains("Medications")) {
             allowedResourceTypes.add("Medication");

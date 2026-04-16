@@ -49,6 +49,9 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "PATIENT")
 
                 // ── Hospital A endpoints — ADMIN or DOCTOR only ─────────────
+                // Note: The ordering here is critical. The more specific push endpoint 
+                // must be evaluated before the wildcard /hospitalA/**, otherwise PATIENT 
+                // requests would fall through and be rejected with 403 Forbidden.
                 .requestMatchers(HttpMethod.POST, "/hospitalA/op-consult/push")
                     .hasRole("PATIENT")
                 .requestMatchers(HttpMethod.POST, "/hospitalA/**")

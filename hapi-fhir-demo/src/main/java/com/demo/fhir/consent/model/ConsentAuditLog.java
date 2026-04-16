@@ -33,9 +33,9 @@ public class ConsentAuditLog {
     @Column(nullable = false, updatable = false)
     private Instant timestamp;
 
-    /** JSON snapshot of the ConsentPreference at the moment of this event. */
+    /** JSON snapshot of the ConsentRequest at the moment of this event. */
     @Column(columnDefinition = "TEXT")
-    private String preferencesSnapshot;
+    private String requestSnapshot;
 
     @PrePersist
     public void prePersist() {

@@ -9,10 +9,9 @@ import com.demo.fhir.consent.model.ConsentRequestEntity;
 import com.demo.fhir.consent.model.ConsentStatus;
 import com.demo.fhir.consent.repository.ConsentAuditLogRepository;
 import com.demo.fhir.consent.repository.ConsentRequestRepository;
+import com.demo.fhir.shared.security.SecurityContextHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,6 +29,9 @@ public class ConsentStore {
 
     @Autowired
     private ConsentAuditLogRepository auditLogRepository;
+
+    @Autowired
+    private SecurityContextHelper securityContextHelper;
 
     // ── Public API ───────────────────────────────────────────────────────────
 
@@ -136,17 +138,9 @@ public class ConsentStore {
         ConsentAuditLog log = new ConsentAuditLog();
         log.setPatientId(request.getPatientId());
         log.setAction(action);
-        log.setChangedBy(getCurrentUsername());
+        log.setChangedBy(securityContextHelper.getCurrentUsername());
         log.setRequestSnapshot(buildRequestSnapshot(request));
         auditLogRepository.save(log);
-    }
-
-    private String getCurrentUsername() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getName() != null) {
-            return auth.getName();
-        }
-        return "system"; // fallback
     }
 
     private String buildRequestSnapshot(ConsentRequestEntity req) {

@@ -116,6 +116,20 @@ public class ConsentStore {
         return activeTypes;
     }
 
+    @Transactional
+    public void autoGrantForPatientPush(String patientId, String targetRequesterId, Set<String> dataTypes) {
+        ConsentRequestEntity request = new ConsentRequestEntity();
+        request.setPatientId(patientId);
+        request.setRequesterId(targetRequesterId);
+        request.setPurpose("Patient-Initiated Push Flow");
+        request.setStatus(ConsentStatus.GRANTED);
+        request.setRequestedDataTypes(dataTypes != null ? new HashSet<>(dataTypes) : new HashSet<>());
+        request.setGrantedDataTypes(dataTypes != null ? new HashSet<>(dataTypes) : new HashSet<>());
+
+        ConsentRequestEntity saved = requestRepository.save(request);
+        appendAudit(saved, ConsentAction.GRANTED);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private void appendAudit(ConsentRequestEntity request, ConsentAction action) {

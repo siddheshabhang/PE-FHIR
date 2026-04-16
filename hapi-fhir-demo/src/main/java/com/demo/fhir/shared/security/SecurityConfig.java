@@ -49,6 +49,8 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "PATIENT")
 
                 // ── Hospital A endpoints — ADMIN or DOCTOR only ─────────────
+                .requestMatchers(HttpMethod.POST, "/hospitalA/op-consult/push")
+                    .hasRole("PATIENT")
                 .requestMatchers(HttpMethod.POST, "/hospitalA/**")
                     .hasAnyRole("ADMIN", "DOCTOR")
 

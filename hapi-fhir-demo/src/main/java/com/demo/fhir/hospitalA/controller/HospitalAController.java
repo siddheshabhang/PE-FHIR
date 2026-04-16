@@ -5,6 +5,7 @@ import ca.uhn.fhir.parser.IParser;
 import com.demo.fhir.consent.model.ConsentStatus;
 import com.demo.fhir.consent.service.ConsentStore;
 import com.demo.fhir.hospitalA.dto.HospitalAOPConsultRecordDTO;
+import com.demo.fhir.hospitalA.dto.PatientPushRequestDTO;
 import com.demo.fhir.hospitalA.mapper.HospitalAOPConsultToFhirMapper;
 import com.demo.fhir.hospitalA.mapper.HospitalAToFHIRMapper;
 import com.demo.fhir.hospitalA.model.HospitalAOPConsultEntity;
@@ -95,6 +96,46 @@ public class HospitalAController {
         
         // Apply Fine-Grained Data Privacy Stripping
         filterBundleByConsent(bundle, grantedTypes);
+
+        bundleValidator.validate(bundle);
+
+        IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
+        return parser.encodeResourceToString(bundle);
+    }
+
+    // ── Patient-Initiated Push Flow ──────────────────────────────────────────
+    @PostMapping("/op-consult/push")
+    public String pushOPConsult(@RequestBody PatientPushRequestDTO pushRequest) {
+        // 1. Get Patient ID from Authentication Context
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated request");
+        }
+        String patientId = auth.getName();
+
+        // 2. Fetch the latest consult record for this patient
+        HospitalAOPConsultEntity latestConsult = consultRepository.findFirstByPatientIdOrderByIdDesc(patientId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No recent OP consult record found for patient: " + patientId));
+
+        // 3. Automatically grant and record consent for this data transfer
+        consentStore.autoGrantForPatientPush(patientId, pushRequest.getTargetRequesterId(), pushRequest.getDataTypes());
+
+        // 4. Transform Entity -> DTO -> Bundle
+        HospitalAOPConsultRecordDTO dto = new HospitalAOPConsultRecordDTO();
+        dto.setPatientId(latestConsult.getPatientId());
+        dto.setPatientFirstName(latestConsult.getPatientFirstName());
+        dto.setPatientLastName(latestConsult.getPatientLastName());
+        dto.setDoctorName(latestConsult.getDoctorName());
+        dto.setVisitDate(latestConsult.getVisitDate());
+        dto.setSymptoms(latestConsult.getSymptoms());
+        dto.setTemperature(latestConsult.getTemperature());
+        dto.setBloodPressure(latestConsult.getBloodPressure());
+        dto.setPrescriptionPdfBase64(latestConsult.getPrescriptionPdfBase64());
+
+        Bundle bundle = HospitalAOPConsultToFhirMapper.mapToBundle(dto);
+
+        // 5. Apply Fine-Grained Data Privacy Stripping based on requested data types
+        filterBundleByConsent(bundle, pushRequest.getDataTypes());
 
         bundleValidator.validate(bundle);
 

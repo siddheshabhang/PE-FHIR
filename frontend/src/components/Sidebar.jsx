@@ -4,9 +4,13 @@ const Sidebar = ({ items }) => {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <span className="sidebar-logo-icon">⚕️</span>
-        <span className="sidebar-logo-text">HealthBridge</span>
+        <div className="sidebar-logo-icon">⚕️</div>
+        <div>
+          <div className="sidebar-logo-text">HealthBridge</div>
+          <div className="sidebar-logo-sub">FHIR Platform</div>
+        </div>
       </div>
+
       <nav className="sidebar-nav">
         {items.map((item) => (
           <NavLink
@@ -22,7 +26,9 @@ const Sidebar = ({ items }) => {
           </NavLink>
         ))}
       </nav>
+
       <div className="sidebar-footer">
+        <div className="sidebar-footer-dot" />
         <span className="sidebar-footer-text">FHIR HL7 R4</span>
       </div>
     </aside>

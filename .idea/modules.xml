@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/PE@FHIR.iml" filepath="$PROJECT_DIR$/.idea/PE@FHIR.iml" />
+      <module fileurl="file://$PROJECT_DIR$/hapi-fhir-demo/backend.iml" filepath="$PROJECT_DIR$/hapi-fhir-demo/backend.iml" />
     </modules>
   </component>
 </project>

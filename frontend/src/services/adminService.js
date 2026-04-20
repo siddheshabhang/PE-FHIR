@@ -1,7 +1,7 @@
 import api from './api';
 
 // ─── Mock Data ───────────────────────────────────────────────────────────────
-const MOCK_ENABLED = true;
+const MOCK_ENABLED = false;
 
 const MOCK_TRANSFERS = [
   {

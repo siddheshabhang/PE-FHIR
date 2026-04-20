@@ -3,7 +3,7 @@ import api from './api';
 // ─── Mock Data ───────────────────────────────────────────────────────────────
 // MOCK_ENABLED = true means data loads even when backend is unreachable.
 // Set to false in production to force real API calls.
-const MOCK_ENABLED = true;
+const MOCK_ENABLED = false;
 
 // Mock consent requests matching ConsentRequestViewDTO structure
 const MOCK_CONSENTS = [

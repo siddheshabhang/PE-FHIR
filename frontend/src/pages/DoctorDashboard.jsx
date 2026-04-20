@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from '../components/Sidebar.jsx';
-import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { doctorService } from '../services/doctorService.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
@@ -12,21 +11,39 @@ const SIDEBAR_ITEMS = [
 
 const DATA_TYPES = ['OP_CONSULT', 'PRESCRIPTION', 'LAB_RESULT'];
 
+// ── Small helpers ──────────────────────────────────────────────
+const FieldRow = ({ label, name, type = 'text', placeholder, value, onChange, error, readOnly }) => (
+  <div className="form-group">
+    <label className="form-label">{label}</label>
+    <input
+      name={name} type={type}
+      className={`form-input ${error ? 'input-error' : ''}`}
+      placeholder={placeholder} value={value}
+      onChange={onChange} readOnly={readOnly}
+    />
+    {error && <span className="field-error">{error}</span>}
+  </div>
+);
+
+const TypeCheckbox = ({ type, checked, onChange }) => (
+  <label className="consent-type-check">
+    <input type="checkbox" checked={checked} onChange={onChange} />
+    {type.replace(/_/g, ' ')}
+  </label>
+);
+
+// ══════════════════════════════════════════════════════════════
 const DoctorDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // ── Hospital A: Submit OP Consult ─────────────────────────────────────────
-  // Fields match HospitalAOPConsultRecordDTO exactly
+  const [activePanel, setActivePanel] = useState('submit');
+
+  // ── Hospital A: Submit ────────────────────────────────────────
   const [submitForm, setSubmitForm] = useState({
-    patientId: '',
-    patientFirstName: '',
-    patientLastName: '',
-    doctorName: user?.username || '',
-    visitDate: '',
-    symptoms: '',
-    temperature: '',
-    bloodPressure: '',
+    patientId: '', patientFirstName: '', patientLastName: '',
+    doctorName: user?.username || '', visitDate: '',
+    symptoms: '', temperature: '', bloodPressure: '',
   });
   const [submitPdf, setSubmitPdf] = useState(null);
   const [submitErrors, setSubmitErrors] = useState({});
@@ -34,24 +51,21 @@ const DoctorDashboard = () => {
   const [submitResult, setSubmitResult] = useState('');
   const [submitError, setSubmitError] = useState('');
 
-  // ── Consent Initiation ────────────────────────────────────────────────────
+  // ── Consent Initiation ────────────────────────────────────────
   const [consentForm, setConsentForm] = useState({
-    patientId: '',
-    purpose: '',
-    requestedDataTypes: ['OP_CONSULT'],
+    patientId: '', purpose: '', requestedDataTypes: ['OP_CONSULT'],
   });
   const [consentLoading, setConsentLoading] = useState(false);
   const [consentResult, setConsentResult] = useState(null);
   const [consentError, setConsentError] = useState('');
 
-  // ── Hospital B: Receive FHIR ──────────────────────────────────────────────
+  // ── Hospital B: Receive FHIR ──────────────────────────────────
   const [fhirInput, setFhirInput] = useState('');
   const [fhirLoading, setFhirLoading] = useState(false);
   const [fhirResult, setFhirResult] = useState(null);
   const [fhirError, setFhirError] = useState('');
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
-
+  // ── Handlers ─────────────────────────────────────────────────
   const validateSubmit = () => {
     const e = {};
     if (!submitForm.patientId.trim()) e.patientId = 'Required';
@@ -82,21 +96,20 @@ const DoctorDashboard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validateSubmit();
-    if (Object.keys(errs).length > 0) { setSubmitErrors(errs); return; }
+    if (Object.keys(errs).length) { setSubmitErrors(errs); return; }
     setSubmitLoading(true);
-    setSubmitError('');
-    setSubmitResult('');
+    setSubmitError(''); setSubmitResult('');
     try {
       const msg = await doctorService.submitPatientData({
         ...submitForm,
         temperature: parseFloat(submitForm.temperature),
         prescriptionPdfBase64: submitPdf || '',
       });
-      setSubmitResult(msg || 'Record submitted and converted to FHIR successfully!');
+      setSubmitResult(msg || 'Record submitted and converted to FHIR successfully.');
       setSubmitForm({ patientId: '', patientFirstName: '', patientLastName: '', doctorName: user?.username || '', visitDate: '', symptoms: '', temperature: '', bloodPressure: '' });
       setSubmitPdf(null);
     } catch (err) {
-      setSubmitError(err?.response?.data?.message || err.message || 'Submission failed');
+      setSubmitError(err?.response?.data?.message || err.message || 'Submission failed.');
     } finally {
       setSubmitLoading(false);
     }
@@ -105,50 +118,50 @@ const DoctorDashboard = () => {
   const handleConsentSubmit = async (e) => {
     e.preventDefault();
     if (!consentForm.patientId.trim() || !consentForm.purpose.trim()) {
-      setConsentError('Patient ID and Purpose are required');
+      setConsentError('Patient ID and Purpose are required.');
       return;
     }
-    setConsentLoading(true);
-    setConsentError('');
-    setConsentResult(null);
+    setConsentLoading(true); setConsentError(''); setConsentResult(null);
     try {
       const result = await doctorService.initiateConsent(
-        consentForm.patientId,
-        consentForm.purpose,
-        consentForm.requestedDataTypes,
+        consentForm.patientId, consentForm.purpose, consentForm.requestedDataTypes,
       );
       setConsentResult(result);
       setConsentForm({ patientId: '', purpose: '', requestedDataTypes: ['OP_CONSULT'] });
     } catch (err) {
-      setConsentError(err?.response?.data?.message || err.message || 'Failed to initiate consent');
+      setConsentError(err?.response?.data?.message || err.message || 'Failed to initiate consent.');
     } finally {
       setConsentLoading(false);
     }
   };
 
-  const toggleConsentType = (type) => {
-    setConsentForm((prev) => {
-      const types = prev.requestedDataTypes;
-      const updated = types.includes(type) ? types.filter((t) => t !== type) : [...types, type];
-      return { ...prev, requestedDataTypes: updated };
-    });
-  };
+  const toggleConsentType = (type) =>
+    setConsentForm((p) => ({
+      ...p,
+      requestedDataTypes: p.requestedDataTypes.includes(type)
+        ? p.requestedDataTypes.filter((t) => t !== type)
+        : [...p.requestedDataTypes, type],
+    }));
 
   const handleFhirReceive = async (e) => {
     e.preventDefault();
     if (!fhirInput.trim()) return;
-    setFhirLoading(true);
-    setFhirError('');
-    setFhirResult(null);
+    setFhirLoading(true); setFhirError(''); setFhirResult(null);
     try {
       const result = await doctorService.receiveFhirAtHospitalB(fhirInput.trim());
       setFhirResult(result);
     } catch (err) {
-      setFhirError(err?.response?.data?.message || err.message || 'Failed to receive FHIR bundle');
+      setFhirError(err?.response?.data?.message || err.message || 'Failed to receive FHIR bundle.');
     } finally {
       setFhirLoading(false);
     }
   };
+
+  const PANELS = [
+    { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital A → FHIR' },
+    { id: 'consent', label: 'Request Consent', icon: '🔒', subtitle: 'Initiate access request' },
+    { id: 'receive', label: 'Receive Bundle', icon: '📥', subtitle: 'Hospital B intake' },
+  ];
 
   return (
     <div className="dashboard-layout">
@@ -158,228 +171,287 @@ const DoctorDashboard = () => {
         <header className="dashboard-topbar">
           <div>
             <h1 className="page-title">Doctor Dashboard</h1>
-            <p className="page-subtitle">Submit patient records and manage consent requests</p>
+            <p className="page-subtitle">Submit patient records, manage consent, and receive FHIR bundles</p>
           </div>
           <div className="topbar-actions">
             <span className="role-badge">👨‍⚕️ {user?.username}</span>
-            <button className="btn-outline" onClick={() => { logout(); navigate('/login'); }}>Logout</button>
+            <button className="btn-outline" onClick={() => { logout(); navigate('/login'); }}>Sign Out</button>
           </div>
         </header>
 
         <motion.div
           className="page-content"
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: 0.35 }}
         >
-          <div className="doctor-panels">
-
-            {/* ── Hospital A: Submit OP Consult ─────────────────────────── */}
-            <div className="panel card">
-              <div className="panel-header panel-header--a">
-                <span className="panel-icon">🏥</span>
-                <div>
-                  <h2 className="panel-title">Hospital A — Submit OP Consult</h2>
-                  <p className="panel-subtitle">Record and convert patient visit to FHIR R4</p>
+          {/* Panel Selector */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {PANELS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setActivePanel(p.id)}
+                style={{
+                  flex: 1, minWidth: '160px',
+                  padding: '14px 18px',
+                  borderRadius: 'var(--r-lg)',
+                  border: `1.5px solid ${activePanel === p.id ? 'var(--c-primary)' : 'var(--c-border)'}`,
+                  background: activePanel === p.id ? 'var(--c-primary-bg)' : 'white',
+                  cursor: 'pointer', textAlign: 'left',
+                  transition: 'all 0.15s ease',
+                  boxShadow: activePanel === p.id ? 'var(--shadow-teal)' : 'var(--shadow-xs)',
+                }}
+              >
+                <div style={{ fontSize: '20px', marginBottom: '6px' }}>{p.icon}</div>
+                <div style={{
+                  fontFamily: "'Syne', sans-serif",
+                  fontWeight: '700', fontSize: '13.5px',
+                  color: activePanel === p.id ? 'var(--c-primary-dark)' : 'var(--c-text-primary)',
+                }}>
+                  {p.label}
                 </div>
-              </div>
-
-              {submitResult && <div className="alert-success">✅ {submitResult}</div>}
-              {submitError && <div className="alert-error">⚠️ {submitError}</div>}
-
-              <form onSubmit={handleSubmit} className="submit-form" noValidate>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Patient ID</label>
-                    <input name="patientId" className={`form-input ${submitErrors.patientId ? 'input-error' : ''}`} placeholder="e.g. P-1001" value={submitForm.patientId} onChange={handleSubmitChange} />
-                    {submitErrors.patientId && <span className="field-error">{submitErrors.patientId}</span>}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Visit Date</label>
-                    <input name="visitDate" type="date" className={`form-input ${submitErrors.visitDate ? 'input-error' : ''}`} value={submitForm.visitDate} onChange={handleSubmitChange} />
-                    {submitErrors.visitDate && <span className="field-error">{submitErrors.visitDate}</span>}
-                  </div>
+                <div style={{ fontSize: '11.5px', color: 'var(--c-text-muted)', marginTop: '2px' }}>
+                  {p.subtitle}
                 </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">First Name</label>
-                    <input name="patientFirstName" className={`form-input ${submitErrors.patientFirstName ? 'input-error' : ''}`} placeholder="Patient first name" value={submitForm.patientFirstName} onChange={handleSubmitChange} />
-                    {submitErrors.patientFirstName && <span className="field-error">{submitErrors.patientFirstName}</span>}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Last Name</label>
-                    <input name="patientLastName" className={`form-input ${submitErrors.patientLastName ? 'input-error' : ''}`} placeholder="Patient last name" value={submitForm.patientLastName} onChange={handleSubmitChange} />
-                    {submitErrors.patientLastName && <span className="field-error">{submitErrors.patientLastName}</span>}
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Doctor Name</label>
-                  <input name="doctorName" className="form-input" placeholder="Dr. Name" value={submitForm.doctorName} onChange={handleSubmitChange} />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Symptoms</label>
-                  <textarea name="symptoms" className={`form-textarea ${submitErrors.symptoms ? 'input-error' : ''}`} placeholder="Describe symptoms..." value={submitForm.symptoms} onChange={handleSubmitChange} rows={3} />
-                  {submitErrors.symptoms && <span className="field-error">{submitErrors.symptoms}</span>}
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Temperature (°C)</label>
-                    <input name="temperature" className={`form-input ${submitErrors.temperature ? 'input-error' : ''}`} placeholder="e.g. 37.5" value={submitForm.temperature} onChange={handleSubmitChange} />
-                    {submitErrors.temperature && <span className="field-error">{submitErrors.temperature}</span>}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Blood Pressure</label>
-                    <input name="bloodPressure" className={`form-input ${submitErrors.bloodPressure ? 'input-error' : ''}`} placeholder="e.g. 120/80" value={submitForm.bloodPressure} onChange={handleSubmitChange} />
-                    {submitErrors.bloodPressure && <span className="field-error">{submitErrors.bloodPressure}</span>}
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Attach Prescription PDF (optional)</label>
-                  <div className="file-upload-area">
-                    <input type="file" id="pdf-upload" accept=".pdf" className="file-input" onChange={handleFileChange} />
-                    <label htmlFor="pdf-upload" className="file-label">
-                      <span className="file-icon">📎</span>
-                      <span>{submitPdf ? '✅ PDF attached' : 'Click to upload PDF'}</span>
-                    </label>
-                  </div>
-                </div>
-
-                <button type="submit" className="btn-primary btn-full" disabled={submitLoading}>
-                  {submitLoading ? <><span className="btn-spinner" /> Submitting...</> : '🚀 Submit & Convert to FHIR'}
-                </button>
-              </form>
-            </div>
-
-            {/* ── Initiate Consent Request ──────────────────────────────── */}
-            <div className="panel card">
-              <div className="panel-header panel-header--purple">
-                <span className="panel-icon">🔒</span>
-                <div>
-                  <h2 className="panel-title">Initiate Consent Request</h2>
-                  <p className="panel-subtitle">Request access to a patient's health records</p>
-                </div>
-              </div>
-
-              {consentResult && (
-                <div className="alert-success">
-                  ✅ Consent request sent! Status: <strong>{consentResult.status}</strong> · ID: {consentResult.id}
-                </div>
-              )}
-              {consentError && <div className="alert-error">⚠️ {consentError}</div>}
-
-              <form onSubmit={handleConsentSubmit} className="submit-form">
-                <div className="form-group">
-                  <label className="form-label">Patient ID</label>
-                  <input
-                    className="form-input"
-                    placeholder="e.g. P-1001"
-                    value={consentForm.patientId}
-                    onChange={(e) => setConsentForm({ ...consentForm, patientId: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Purpose of Request</label>
-                  <input
-                    className="form-input"
-                    placeholder="e.g. Follow-up Consultation, Emergency Review"
-                    value={consentForm.purpose}
-                    onChange={(e) => setConsentForm({ ...consentForm, purpose: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Requested Data Types</label>
-                  <div style={{ display: 'flex', gap: '16px', marginTop: '8px', flexWrap: 'wrap' }}>
-                    {DATA_TYPES.map((type) => (
-                      <label key={type} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}>
-                        <input
-                          type="checkbox"
-                          checked={consentForm.requestedDataTypes.includes(type)}
-                          onChange={() => toggleConsentType(type)}
-                        />
-                        {type.replace(/_/g, ' ')}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <button type="submit" className="btn-primary" disabled={consentLoading}>
-                  {consentLoading ? '⏳ Sending...' : '📨 Send Consent Request'}
-                </button>
-              </form>
-            </div>
-
-            {/* ── Hospital B: Receive FHIR Bundle ───────────────────────── */}
-            <div className="panel card">
-              <div className="panel-header panel-header--b">
-                <span className="panel-icon">🏨</span>
-                <div>
-                  <h2 className="panel-title">Hospital B — Receive FHIR Bundle</h2>
-                  <p className="panel-subtitle">Paste a FHIR JSON bundle to receive and parse it</p>
-                </div>
-              </div>
-
-              {fhirError && <div className="alert-error">⚠️ {fhirError}</div>}
-
-              <form onSubmit={handleFhirReceive} className="submit-form">
-                <div className="form-group">
-                  <label className="form-label">FHIR JSON Bundle</label>
-                  <textarea
-                    className="form-textarea"
-                    rows={8}
-                    placeholder={'Paste FHIR JSON here...\n{"resourceType": "Bundle", ...}'}
-                    value={fhirInput}
-                    onChange={(e) => setFhirInput(e.target.value)}
-                    style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}
-                  />
-                </div>
-                <button type="submit" className="btn-primary" disabled={fhirLoading || !fhirInput.trim()}>
-                  {fhirLoading ? <><span className="btn-spinner" /> Processing...</> : '📥 Receive & Parse'}
-                </button>
-              </form>
-
-              {/* Parsed result */}
-              <AnimatePresence>
-                {fhirResult && (
-                  <motion.div
-                    className="card"
-                    style={{ marginTop: '20px', padding: '16px', background: '#f8faff' }}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <h4 style={{ marginBottom: '12px', color: '#5b5fc7' }}>✅ Parsed Record (HospitalBOPConsultRecordDTO)</h4>
-                    <div className="detail-grid">
-                      {[
-                        ['UHID', fhirResult.uhid],
-                        ['Patient', fhirResult.patientName],
-                        ['Consult Date', fhirResult.consultDate],
-                        ['Doctor', fhirResult.doctor],
-                        ['Clinical Notes', fhirResult.clinicalNotes],
-                        ['Blood Pressure', fhirResult.vitals?.bp],
-                        ['Temperature', fhirResult.vitals?.temp],
-                        ['Consent Verified', fhirResult.consentVerified ? '✅ Yes' : '❌ No'],
-                      ].map(([label, val]) => (
-                        <div key={label} className="detail-row">
-                          <span className="detail-label">{label}</span>
-                          <span className="detail-value">{val || 'N/A'}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {fhirResult.prescriptionPdfBase64 && (
-                      <div style={{ marginTop: '10px', fontSize: '0.85rem', color: '#666' }}>
-                        📎 Prescription PDF attached
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
+              </button>
+            ))}
           </div>
+
+          {/* ── Hospital A: Submit OP Consult ──────────────────────────── */}
+          <AnimatePresence mode="wait">
+            {activePanel === 'submit' && (
+              <motion.div
+                key="submit"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar panel-accent-bar--teal" />
+                  <div className="panel-icon panel-icon--teal">🏥</div>
+                  <div>
+                    <div className="panel-title">Hospital A — Submit OP Consult</div>
+                    <div className="panel-subtitle">Record and convert patient visit to FHIR R4 Bundle</div>
+                  </div>
+                </div>
+
+                <div className="submit-form">
+                  <AnimatePresence>
+                    {submitResult && (
+                      <motion.div className="alert-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        ✅ {submitResult}
+                      </motion.div>
+                    )}
+                    {submitError && (
+                      <motion.div className="alert-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        ⚠️ {submitError}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <form onSubmit={handleSubmit} noValidate>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                      <div className="form-row">
+                        <FieldRow label="Patient ID" name="patientId" placeholder="e.g. P-1001" value={submitForm.patientId} onChange={handleSubmitChange} error={submitErrors.patientId} />
+                        <FieldRow label="Visit Date" name="visitDate" type="date" value={submitForm.visitDate} onChange={handleSubmitChange} error={submitErrors.visitDate} />
+                      </div>
+                      <div className="form-row">
+                        <FieldRow label="First Name" name="patientFirstName" placeholder="Patient first name" value={submitForm.patientFirstName} onChange={handleSubmitChange} error={submitErrors.patientFirstName} />
+                        <FieldRow label="Last Name" name="patientLastName" placeholder="Patient last name" value={submitForm.patientLastName} onChange={handleSubmitChange} error={submitErrors.patientLastName} />
+                      </div>
+                      <FieldRow label="Doctor Name" name="doctorName" placeholder="Dr. Name" value={submitForm.doctorName} onChange={handleSubmitChange} />
+
+                      <div className="form-group">
+                        <label className="form-label">Symptoms / Clinical Notes</label>
+                        <textarea
+                          name="symptoms"
+                          className={`form-textarea ${submitErrors.symptoms ? 'input-error' : ''}`}
+                          placeholder="Describe patient symptoms in detail..."
+                          value={submitForm.symptoms} onChange={handleSubmitChange} rows={3}
+                        />
+                        {submitErrors.symptoms && <span className="field-error">{submitErrors.symptoms}</span>}
+                      </div>
+
+                      <div className="form-row">
+                        <FieldRow label="Temperature (°C)" name="temperature" placeholder="e.g. 37.5" value={submitForm.temperature} onChange={handleSubmitChange} error={submitErrors.temperature} />
+                        <FieldRow label="Blood Pressure" name="bloodPressure" placeholder="e.g. 120/80" value={submitForm.bloodPressure} onChange={handleSubmitChange} error={submitErrors.bloodPressure} />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Prescription PDF (Optional)</label>
+                        <div className="file-upload-area">
+                          <input type="file" id="pdf-upload" accept=".pdf" className="file-input" onChange={handleFileChange} />
+                          <label htmlFor="pdf-upload" className="file-label">
+                            <span className="file-icon">📎</span>
+                            <span>{submitPdf ? '✅ PDF attached — ready to send' : 'Click to upload PDF prescription'}</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <button type="submit" className="btn-primary btn-full" disabled={submitLoading}>
+                        {submitLoading ? <><span className="btn-spinner" /> Converting to FHIR…</> : '🚀 Submit & Convert to FHIR R4'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Consent Initiation ─────────────────────────────────── */}
+            {activePanel === 'consent' && (
+              <motion.div
+                key="consent"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar panel-accent-bar--violet" />
+                  <div className="panel-icon panel-icon--violet">🔒</div>
+                  <div>
+                    <div className="panel-title">Initiate Consent Request</div>
+                    <div className="panel-subtitle">Request patient authorization to access their health records</div>
+                  </div>
+                </div>
+
+                <div className="submit-form">
+                  <AnimatePresence>
+                    {consentResult && (
+                      <motion.div className="alert-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        ✅ Consent request sent — Status: <strong>{consentResult.status}</strong> · ID: #{consentResult.id}
+                      </motion.div>
+                    )}
+                    {consentError && (
+                      <motion.div className="alert-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        ⚠️ {consentError}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <form onSubmit={handleConsentSubmit}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Patient ID</label>
+                        <input className="form-input" placeholder="e.g. P-1001"
+                          value={consentForm.patientId}
+                          onChange={(e) => setConsentForm({ ...consentForm, patientId: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Purpose of Request</label>
+                        <input className="form-input" placeholder="e.g. Follow-up consultation, Emergency review"
+                          value={consentForm.purpose}
+                          onChange={(e) => setConsentForm({ ...consentForm, purpose: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Requested Data Types</label>
+                        <div className="consent-types-row">
+                          {DATA_TYPES.map((type) => (
+                            <TypeCheckbox
+                              key={type} type={type}
+                              checked={consentForm.requestedDataTypes.includes(type)}
+                              onChange={() => toggleConsentType(type)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <button type="submit" className="btn-primary" disabled={consentLoading}>
+                        {consentLoading ? '⏳ Sending request…' : '📨 Send Consent Request'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Hospital B: Receive FHIR ─────────────────────────── */}
+            {activePanel === 'receive' && (
+              <motion.div
+                key="receive"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar panel-accent-bar--green" />
+                  <div className="panel-icon panel-icon--green">🏨</div>
+                  <div>
+                    <div className="panel-title">Hospital B — Receive FHIR Bundle</div>
+                    <div className="panel-subtitle">Parse and extract data from an inbound FHIR JSON bundle</div>
+                  </div>
+                </div>
+
+                <div className="submit-form">
+                  {fhirError && <div className="alert-error">⚠️ {fhirError}</div>}
+
+                  <form onSubmit={handleFhirReceive}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                      <div className="form-group">
+                        <label className="form-label">FHIR JSON Bundle</label>
+                        <textarea
+                          className="form-textarea"
+                          rows={9}
+                          placeholder={'Paste FHIR JSON bundle here…\n\n{"resourceType": "Bundle", "type": "collection", ...}'}
+                          value={fhirInput}
+                          onChange={(e) => setFhirInput(e.target.value)}
+                          style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}
+                        />
+                      </div>
+                      <button type="submit" className="btn-primary" disabled={fhirLoading || !fhirInput.trim()}>
+                        {fhirLoading ? <><span className="btn-spinner" /> Parsing…</> : '📥 Parse FHIR Bundle'}
+                      </button>
+                    </div>
+                  </form>
+
+                  <AnimatePresence>
+                    {fhirResult && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        style={{ marginTop: '16px' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                          <div className="panel-icon panel-icon--green" style={{ width: '28px', height: '28px', fontSize: '14px' }}>✅</div>
+                          <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: '700', fontSize: '14px', color: 'var(--c-success-text)' }}>
+                            Parsed Successfully
+                          </span>
+                          {fhirResult.consentVerified && (
+                            <span className="badge-success status-badge" style={{ marginLeft: 'auto' }}>
+                              <span className="badge-dot" />Consent Verified
+                            </span>
+                          )}
+                        </div>
+                        <div className="detail-grid">
+                          {[
+                            ['UHID', fhirResult.uhid],
+                            ['Patient Name', fhirResult.patientName],
+                            ['Consult Date', fhirResult.consultDate],
+                            ['Doctor', fhirResult.doctor],
+                            ['Clinical Notes', fhirResult.clinicalNotes],
+                            ['Blood Pressure', fhirResult.vitals?.bp],
+                            ['Temperature', fhirResult.vitals?.temp],
+                          ].map(([label, val]) => (
+                            <div key={label} className="detail-row">
+                              <span className="detail-label">{label}</span>
+                              <span className="detail-value" style={{ fontFamily: val && label === 'UHID' ? "'JetBrains Mono', monospace" : 'inherit', fontSize: label === 'UHID' ? '12px' : '13px' }}>
+                                {val || <span style={{ color: 'var(--c-text-disabled)' }}>N/A</span>}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
     </div>

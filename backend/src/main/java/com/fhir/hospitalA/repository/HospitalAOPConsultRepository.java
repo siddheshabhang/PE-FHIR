@@ -8,5 +8,5 @@ import java.util.Optional;
 
 @Repository
 public interface HospitalAOPConsultRepository extends JpaRepository<HospitalAOPConsultEntity, Long> {
-    Optional<HospitalAOPConsultEntity> findFirstByPatientIdOrderByIdDesc(String patientId);
+    Optional<HospitalAOPConsultEntity> findFirstByAbhaIdOrderByIdDesc(String abhaId);
 }

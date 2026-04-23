@@ -19,6 +19,9 @@ public class HospitalAOPConsultEntity {
     @Column(nullable = false)
     private String patientId;
 
+    @Column
+    private String abhaId;
+
     private String patientFirstName;
     private String patientLastName;
     

@@ -88,7 +88,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             patient.setUsername("patient1");
             patient.setPassword("patientone");
             patient.setRole(UserRole.PATIENT);
-            patient.setPatientId("P-1001");
+            patient.setAbhaId("ABHA-1234-5678-9012-34");
             patient.setHospitalId("HOSP-A");
             patient.setFullName("Siddhesh Abhang");
             authService.register(patient);
@@ -96,6 +96,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             // Create an initial consult record for the patient so push flow doesn't 404
             HospitalAOPConsultEntity consult = new HospitalAOPConsultEntity();
             consult.setPatientId("P-1001");
+            consult.setAbhaId("ABHA-1234-5678-9012-34");
             consult.setPatientFirstName("Siddhesh");
             consult.setPatientLastName("Abhang");
             consult.setDoctorName("Dr. Deshmukh");

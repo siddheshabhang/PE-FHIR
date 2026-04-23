@@ -8,5 +8,6 @@ import java.util.List;
 @Repository
 public interface HospitalBOPConsultRepository
         extends JpaRepository<HospitalBOPConsultEntity, Long> {
-    List<HospitalBOPConsultEntity> findByUhidOrderByReceivedAtDesc(String uhid);
+    List<HospitalBOPConsultEntity> findByAbhaIdOrderByReceivedAtDesc(String abhaId);
+    java.util.Optional<HospitalBOPConsultEntity> findFirstByAbhaIdOrderByIdDesc(String abhaId);
 }

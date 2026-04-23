@@ -4,6 +4,7 @@ import lombok.Data;
 
 @Data
 public class DoctorPatientRequestDTO {
+    private String abhaId;
     private String firstName;
     private String lastName;
     private String dateOfBirth; // dd/MM/yyyy

@@ -129,6 +129,46 @@ export const doctorService = {
   },
 
   /**
+   * GET /doctor/patients/abha/{abhaId}
+   * Fetch patient details by ABHA-ID from the central auth registry
+   */
+  getPatientByAbhaId: async (abhaId) => {
+    try {
+      const res = await api.get(`/doctor/patients/abha/${abhaId}`);
+      return res.data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  /**
+   * POST /doctor/patients/link/{abhaId}
+   * Link an existing patient to the doctor's hospital
+   */
+  linkPatientByAbhaId: async (abhaId) => {
+    try {
+      const res = await api.post(`/doctor/patients/link/${abhaId}`);
+      return res.data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  /**
+   * GET /hospitalA/op-consult
+   * (If applicable)
+   */
+  getHospitalAConsults: async () => {
+    try {
+      const res = await api.get('/hospitalA/op-consult');
+      return res.data;
+    } catch {
+      if (MOCK_ENABLED) return [];
+      throw new Error('Failed to fetch Hospital A intake records');
+    }
+  },
+
+  /**
    * GET /hospitalB/op-consult
    * Returns list of HospitalBOPConsultEntity
    */

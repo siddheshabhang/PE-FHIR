@@ -14,7 +14,8 @@ public class HospitalBOPConsultEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String uhid;
+    private String abhaId;
+    private String patientId;
     private String patientName;
     private String consultDate;
     private String doctor;

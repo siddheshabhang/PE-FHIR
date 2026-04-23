@@ -192,7 +192,7 @@ public class HIEGatewayService {
 
         try {
             String fhirBundle = hipFhirClient.pullBundle(
-                request.getPatientId(), consentToken, grantedTypes);
+                request.getHip(), request.getPatientId(), consentToken, grantedTypes);
 
             auditService.markSuccess(auditId);
             System.out.println("✅ HIE Gateway: Successfully pulled FHIR bundle. Length: " + fhirBundle.length());

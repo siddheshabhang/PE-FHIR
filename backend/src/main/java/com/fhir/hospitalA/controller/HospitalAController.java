@@ -48,9 +48,8 @@ public class HospitalAController {
         if (!securityContextHelper.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated request");
         }
-        // Extract patientId from the JWT claim — the service needs the actual patient ID,
-        // not just the username, so we use extractPatientId() which reads the JWT claim.
-        String patientId = securityContextHelper.extractPatientId();
+        // Extract ABHA-ID from the JWT claim.
+        String patientId = securityContextHelper.extractAbhaId();
         return hospitalAService.pushOPConsult(pushRequest, patientId);
     }
 }

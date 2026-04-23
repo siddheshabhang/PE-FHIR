@@ -4,7 +4,8 @@ import lombok.Data;
 
 @Data
 public class HospitalBOPConsultRecordDTO {
-    private String uhid;
+    private String abhaId;
+    private String patientId;
     private String patientName;
     private String consultDate;
     private String doctor;

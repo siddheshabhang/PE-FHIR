@@ -48,7 +48,7 @@ public class ConsentController {
     public ConsentRequestViewDTO respondToRequest(
             @PathVariable Long requestId,
             @RequestBody ConsentDecisionDTO decisionDTO) {
-        String patientId = securityContextHelper.extractPatientId();
+        String patientId = securityContextHelper.extractAbhaId();
         return consentStore.processDecision(requestId, patientId, decisionDTO);
     }
 
@@ -56,7 +56,7 @@ public class ConsentController {
 
     @PostMapping("/revoke/{requestId}")
     public String revokeConsent(@PathVariable Long requestId) {
-        String patientId = securityContextHelper.extractPatientId();
+        String patientId = securityContextHelper.extractAbhaId();
         consentStore.revoke(requestId, patientId);
         return "Consent REVOKED for request ID: " + requestId;
     }

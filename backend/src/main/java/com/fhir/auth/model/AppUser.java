@@ -26,9 +26,24 @@ public class AppUser {
     @Column(nullable = false)
     private UserRole role;
 
-    /** Only set for PATIENT role — links to the patient's clinical data. */
+    /** ABHA-ID is the universal system ID for patients. */
+    @Column(unique = true)
+    private String abhaId;
+
     @Column
-    private String patientId;
+    private String email;
+
+    @Column
+    private String phone;
+
+    @Column
+    private String gender;
+
+    @Column
+    private String dateOfBirth;
+
+    @Column
+    private String bloodGroup;
 
     @Column
     private String hospitalId;

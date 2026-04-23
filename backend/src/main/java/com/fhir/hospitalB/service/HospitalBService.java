@@ -53,7 +53,8 @@ public class HospitalBService {
 
         // Persist to hospital_b_db
         HospitalBOPConsultEntity entity = new HospitalBOPConsultEntity();
-        entity.setUhid(dto.getUhid());
+        entity.setAbhaId(dto.getAbhaId());
+        entity.setPatientId(dto.getPatientId());
         entity.setPatientName(dto.getPatientName());
         entity.setConsultDate(dto.getConsultDate());
         entity.setDoctor(dto.getDoctor());
@@ -73,5 +74,37 @@ public class HospitalBService {
 
     public java.util.List<HospitalBOPConsultEntity> getAllConsults() {
         return consultRepository.findAll();
+    }
+
+    /**
+     * Called by HIPFhirClient when HIE requests data from Hospital B.
+     */
+    public String pullFhirBundle(String abhaId, String consentToken, java.util.Set<String> scope) {
+        HospitalBOPConsultEntity consult = consultRepository
+            .findFirstByAbhaIdOrderByIdDesc(abhaId)
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND,
+                "No consult record found for patient with ABHA-ID: " + abhaId));
+
+        HospitalBOPConsultRecordDTO dto = new HospitalBOPConsultRecordDTO();
+        dto.setAbhaId(consult.getAbhaId());
+        dto.setPatientId(consult.getPatientId());
+        dto.setPatientName(consult.getPatientName());
+        dto.setConsultDate(consult.getConsultDate());
+        dto.setDoctor(consult.getDoctor());
+        dto.setClinicalNotes(consult.getClinicalNotes());
+        
+        HospitalBOPConsultRecordDTO.Vitals vitals = new HospitalBOPConsultRecordDTO.Vitals();
+        vitals.setBp(consult.getBloodPressure());
+        vitals.setTemp(consult.getTemperature());
+        dto.setVitals(vitals);
+        
+        dto.setPrescriptionPdfBase64(consult.getPrescriptionPdfBase64());
+
+        Bundle bundle = com.fhir.hospitalB.mapper.HospitalBOPConsultToFhirMapper.mapToBundle(dto);
+
+        return fhirContext.newJsonParser()
+            .setPrettyPrint(true)
+            .encodeResourceToString(bundle);
     }
 }

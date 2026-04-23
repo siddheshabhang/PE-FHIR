@@ -15,8 +15,9 @@ public class FHIRToHospitalBMapper {
 
         HospitalBPatient hb = new HospitalBPatient();
 
-        // UHID (new hospital generates its own)
-        hb.setUhid("B998");
+        // ABHA-ID
+        hb.setAbhaId(patient.getId());
+        hb.setPatientId("B998");
 
         // Name
         if (!patient.getName().isEmpty()) {

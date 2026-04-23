@@ -97,11 +97,11 @@ public class HospitalAService {
 
         // 2. Consent gate — must be checked before any outward data transfer
         Set<String> grantedTypes = consentStore.getActiveGrantedDataTypes(
-                consultRecord.getPatientId(), requesterId);
+                consultRecord.getAbhaId(), requesterId);
 
         if (grantedTypes.isEmpty()) {
             String reason = "No active GRANTED consent request found for patient: "
-                    + consultRecord.getPatientId()
+                    + consultRecord.getAbhaId()
                     + " and requester: " + requesterId
                     + ". Call POST /consent/initiate first and wait for patient approval.";
             // 403 FORBIDDEN — intentional business rule; local record was saved but outward transfer aborted
@@ -114,7 +114,7 @@ public class HospitalAService {
 
         // 4. Audit → validate → encode
         Long auditId = auditService.logPending(
-                consultRecord.getPatientId(),
+                consultRecord.getAbhaId() != null ? consultRecord.getAbhaId() : consultRecord.getPatientId(),
                 "HospitalA",
                 requesterId,
                 bundle.getEntry().size(),
@@ -153,7 +153,7 @@ public class HospitalAService {
 
         // 1. Fetch the latest consult record for this patient
         HospitalAOPConsultEntity latestConsult = consultRepository
-                .findFirstByPatientIdOrderByIdDesc(patientId)
+                .findFirstByAbhaIdOrderByIdDesc(patientId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "No recent OP consult record found for patient: " + patientId));
@@ -203,6 +203,7 @@ public class HospitalAService {
     private void persistOPConsult(HospitalAOPConsultRecordDTO dto) {
         HospitalAOPConsultEntity entity = new HospitalAOPConsultEntity();
         entity.setPatientId(dto.getPatientId());
+        entity.setAbhaId(dto.getAbhaId());
         entity.setPatientFirstName(dto.getPatientFirstName());
         entity.setPatientLastName(dto.getPatientLastName());
         entity.setDoctorName(dto.getDoctorName());
@@ -221,6 +222,7 @@ public class HospitalAService {
     private HospitalAOPConsultRecordDTO entityToDTO(HospitalAOPConsultEntity entity) {
         HospitalAOPConsultRecordDTO dto = new HospitalAOPConsultRecordDTO();
         dto.setPatientId(entity.getPatientId());
+        dto.setAbhaId(entity.getAbhaId());
         dto.setPatientFirstName(entity.getPatientFirstName());
         dto.setPatientLastName(entity.getPatientLastName());
         dto.setDoctorName(entity.getDoctorName());
@@ -343,9 +345,9 @@ public class HospitalAService {
             }
         }
 
-        // Fetch latest consult record for this patient
+        // Fetch latest consult record for this patient using ABHA-ID
         HospitalAOPConsultEntity consult = consultRepository
-            .findFirstByPatientIdOrderByIdDesc(patientId)
+            .findFirstByAbhaIdOrderByIdDesc(patientId)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.NOT_FOUND,
                 "No consult record found for patient: " + patientId));

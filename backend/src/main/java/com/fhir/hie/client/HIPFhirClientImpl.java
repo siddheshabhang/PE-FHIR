@@ -17,8 +17,16 @@ public class HIPFhirClientImpl implements HIPFhirClient {
     @Autowired
     private HospitalAService hospitalAService;
 
-    @Override
-    public String pullBundle(String patientId, String consentToken, Set<String> scope) {
-        return hospitalAService.pullFhirBundle(patientId, consentToken, scope);
+    @Autowired
+    private com.fhir.hospitalB.service.HospitalBService hospitalBService;
+
+    public String pullBundle(String hip, String patientId, String consentToken, Set<String> scope) {
+        if ("HospitalA".equalsIgnoreCase(hip)) {
+            return hospitalAService.pullFhirBundle(patientId, consentToken, scope);
+        } else if ("HospitalB".equalsIgnoreCase(hip)) {
+            return hospitalBService.pullFhirBundle(patientId, consentToken, scope);
+        } else {
+            throw new IllegalArgumentException("Unknown HIP: " + hip);
+        }
     }
 }

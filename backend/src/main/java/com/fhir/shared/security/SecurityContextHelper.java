@@ -31,12 +31,12 @@ public class SecurityContextHelper {
      * {@link #getCurrentUsername()} when the claim is absent (e.g. for
      * DOCTOR / ADMIN tokens that do not carry a patientId).
      */
-    public String extractPatientId() {
+    public String extractAbhaId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getDetails() instanceof Claims claims) {
-            String patientId = claims.get("patientId", String.class);
-            if (patientId != null && !patientId.isBlank()) {
-                return patientId;
+            String abhaId = claims.get("abhaId", String.class);
+            if (abhaId != null && !abhaId.isBlank()) {
+                return abhaId;
             }
         }
         return getCurrentUsername();

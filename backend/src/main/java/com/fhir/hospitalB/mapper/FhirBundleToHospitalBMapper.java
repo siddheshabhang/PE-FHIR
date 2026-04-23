@@ -17,7 +17,8 @@ public class FhirBundleToHospitalBMapper {
 
             // ── Patient ──────────────────────────────────────────────────────
             if (resource instanceof Patient patient) {
-                dto.setUhid("B-" + patient.getId());
+                dto.setAbhaId(patient.getId());
+                dto.setPatientId("B-" + patient.getId());
                 if (!patient.getName().isEmpty()) {
                     HumanName name = patient.getNameFirstRep();
                     dto.setPatientName(

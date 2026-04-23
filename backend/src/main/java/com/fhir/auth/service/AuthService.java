@@ -46,12 +46,22 @@ public class AuthService {
         user.setUsername(request.getUsername());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRole(request.getRole());
-        user.setPatientId(request.getPatientId());
+        user.setAbhaId(request.getAbhaId());
+        user.setEmail(request.getEmail());
+        user.setPhone(request.getPhone());
+        user.setGender(request.getGender());
+        user.setDateOfBirth(request.getDateOfBirth());
+        user.setBloodGroup(request.getBloodGroup());
         user.setHospitalId(request.getHospitalId());
         user.setFullName(request.getFullName());
         user.setSpecialization(request.getSpecialization());
 
         return userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public AppUser findByAbhaId(String abhaId) {
+        return userRepository.findByAbhaId(abhaId).orElse(null);
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -104,7 +114,7 @@ public class AuthService {
         Map<String, Object> claims = Map.of(
                 "sub",       user.getUsername(),
                 "role",      user.getRole().name(),
-                "patientId", user.getPatientId() != null ? user.getPatientId() : "",
+                "abhaId",    user.getAbhaId() != null ? user.getAbhaId() : "",
                 "hospitalId",user.getHospitalId() != null ? user.getHospitalId() : "",
                 "type",      "access"
         );

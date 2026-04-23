@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { hospitalService } from '../services/hospitalService';
 
 const ROLES = [
   { value: 'ADMIN', label: 'Hospital Admin', icon: '🏥' },
@@ -27,11 +28,16 @@ const LoginPage = () => {
   const navigate = useNavigate();
 
   const [isRegister, setIsRegister] = useState(false);
-  const [form, setForm] = useState({ username: '', password: '', role: 'DOCTOR', patientId: '' });
+  const [form, setForm] = useState({ username: '', password: '', role: 'DOCTOR', patientId: '', hospitalId: '', fullName: '', specialization: '' });
+  const [hospitals, setHospitals] = useState([]);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    hospitalService.getHospitals().then(setHospitals);
+  }, []);
 
   if (isAuthenticated && user) {
     return <Navigate to={ROLE_ROUTES[user.role] || '/login'} replace />;
@@ -44,6 +50,7 @@ const LoginPage = () => {
     if (!form.password) errs.password = 'Password is required';
     else if (form.password.length < 6) errs.password = 'At least 6 characters required';
     if (!form.role) errs.role = 'Please select a role';
+    if (isRegister && form.role === 'DOCTOR' && !form.hospitalId) errs.hospitalId = 'Hospital selection is required for doctors';
     return errs;
   };
 
@@ -62,7 +69,7 @@ const LoginPage = () => {
     try {
       if (isRegister) {
         const generatedPatientId = form.role === 'PATIENT' ? `P-${Math.floor(1000 + Math.random() * 9000)}` : '';
-        await register(form.username, form.password, form.role, generatedPatientId);
+        await register(form.username, form.password, form.role, generatedPatientId, form.hospitalId, form.fullName, form.specialization);
         setSuccessMsg(`Account created successfully.`);
         setIsRegister(false);
         setForm((f) => ({ ...f, password: '' }));
@@ -233,6 +240,49 @@ const LoginPage = () => {
               </div>
               {errors.role && <span className="field-error">{errors.role}</span>}
             </div>
+
+            {isRegister && (
+              <>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="fullName">Full Name</label>
+                  <input
+                    id="fullName" name="fullName" type="text"
+                    className="form-input"
+                    placeholder="Enter your full name"
+                    value={form.fullName} onChange={handleChange}
+                  />
+                </div>
+                
+                {form.role !== 'ADMIN' && (
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="hospitalId">Hospital Base</label>
+                    <select
+                      id="hospitalId" name="hospitalId"
+                      className={`form-input ${errors.hospitalId ? 'input-error' : ''}`}
+                      value={form.hospitalId} onChange={handleChange}
+                    >
+                      <option value="">-- Select a Hospital --</option>
+                      {hospitals.map(h => (
+                        <option key={h.id} value={h.id}>{h.name} ({h.id})</option>
+                      ))}
+                    </select>
+                    {errors.hospitalId && <span className="field-error">{errors.hospitalId}</span>}
+                  </div>
+                )}
+
+                {form.role === 'DOCTOR' && (
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="specialization">Specialization</label>
+                    <input
+                      id="specialization" name="specialization" type="text"
+                      className="form-input"
+                      placeholder="e.g. Cardiologist"
+                      value={form.specialization} onChange={handleChange}
+                    />
+                  </div>
+                )}
+              </>
+            )}
 
 
 

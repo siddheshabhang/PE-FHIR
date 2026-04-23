@@ -1,5 +1,9 @@
 package com.fhir.admin.service;
 
+import com.fhir.auth.dto.RegisterRequest;
+import com.fhir.auth.model.AppUser;
+import com.fhir.auth.repository.AuthUserRepository;
+import com.fhir.auth.service.AuthService;
 import com.fhir.shared.audit.TransferAuditLog;
 import com.fhir.shared.audit.TransferAuditLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +20,12 @@ public class AdminService {
 
     @Autowired
     private TransferAuditLogRepository auditLogRepository;
+
+    @Autowired
+    private AuthUserRepository authUserRepository;
+
+    @Autowired
+    private AuthService authService;
 
     public List<TransferAuditLog> getAllTransfers() {
         return auditLogRepository.findAll(Sort.by(Sort.Direction.DESC, "timestamp"));
@@ -67,5 +77,17 @@ public class AdminService {
         }
 
         return healthList;
+    }
+
+    public List<AppUser> getAllUsers() {
+        return authUserRepository.findAll();
+    }
+
+    public AppUser createUser(RegisterRequest request) {
+        return authService.register(request);
+    }
+
+    public void deleteUser(Long id) {
+        authUserRepository.deleteById(id);
     }
 }

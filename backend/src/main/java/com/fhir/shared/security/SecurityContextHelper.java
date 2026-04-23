@@ -43,6 +43,20 @@ public class SecurityContextHelper {
     }
 
     /**
+     * Returns the {@code hospitalId} claim embedded in the JWT.
+     */
+    public String extractHospitalId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getDetails() instanceof Claims claims) {
+            String hospitalId = claims.get("hospitalId", String.class);
+            if (hospitalId != null && !hospitalId.isBlank()) {
+                return hospitalId;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Returns {@code true} when a valid, non-anonymous authentication token
      * is present in the security context.
      */

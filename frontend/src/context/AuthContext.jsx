@@ -33,6 +33,7 @@ export const AuthProvider = ({ children }) => {
       username: data.username,
       role: data.role,
       patientId: claims.patientId || null,
+      hospitalId: claims.hospitalId || null,
     };
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('refreshToken', data.refreshToken);
@@ -42,8 +43,8 @@ export const AuthProvider = ({ children }) => {
     return userObj;
   }, []);
 
-  const register = useCallback(async (username, password, role, patientId) => {
-    const data = await authService.register(username, password, role, patientId);
+  const register = useCallback(async (username, password, role, patientId, hospitalId, fullName, specialization) => {
+    const data = await authService.register(username, password, role, patientId, hospitalId, fullName, specialization);
     return data;
   }, []);
 

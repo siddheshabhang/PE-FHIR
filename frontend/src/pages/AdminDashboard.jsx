@@ -15,6 +15,7 @@ const SIDEBAR_ITEMS = [
   { to: '/admin/dashboard', label: 'Overview', icon: '📊', end: true },
   { to: '/admin/transfers', label: 'Transfers', icon: '🔄' },
   { to: '/admin/audit-logs', label: 'Audit Logs', icon: '📋' },
+  { to: '/admin/users', label: 'Users', icon: '👥' },
 ];
 
 const FILTER_OPTIONS = ['ALL', 'SUCCESS', 'PENDING', 'FAILED'];
@@ -43,6 +44,7 @@ const AdminDashboard = () => {
   const [transfers, setTransfers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [healthData, setHealthData] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('transfers');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -52,14 +54,16 @@ const AdminDashboard = () => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [t, a, h] = await Promise.all([
+        const [t, a, h, u] = await Promise.all([
           adminService.getAllTransfers(),
           adminService.getAuditLogs(),
           adminService.getSystemHealth(),
+          adminService.getUsers(),
         ]);
         setTransfers(t);
         setAuditLogs(a);
         setHealthData(h);
+        setUsers(u);
       } finally {
         setLoading(false);
       }
@@ -205,6 +209,12 @@ const AdminDashboard = () => {
                 >
                   📋 Audit Logs
                 </button>
+                <button
+                  className={`tab-btn ${activeTab === 'users' ? 'tab-btn--active' : ''}`}
+                  onClick={() => setActiveTab('users')}
+                >
+                  👥 Users
+                </button>
               </div>
 
               {activeTab === 'transfers' && (
@@ -318,6 +328,60 @@ const AdminDashboard = () => {
                             <td><span className="action-tag">{log.action}</span></td>
                             <td style={{ fontSize: '13px', color: 'var(--c-text-secondary)', maxWidth: '220px' }}>{log.resource}</td>
                             <td><StatusBadge status={log.status} /></td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Users Table */}
+            {activeTab === 'users' && (
+              <motion.div
+                className="card"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}
+              >
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Full Name</th>
+                        <th>Hospital</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="table-empty">
+                            No users found.
+                          </td>
+                        </tr>
+                      ) : (
+                        users.map((u) => (
+                          <tr key={u.id} className="table-row">
+                            <td><span className="user-tag">@{u.username}</span></td>
+                            <td><StatusBadge status={u.role} /></td>
+                            <td style={{ fontSize: '13px', color: 'var(--c-text-secondary)' }}>{u.fullName || '—'}</td>
+                            <td style={{ fontSize: '13px', color: 'var(--c-text-secondary)' }}>{u.hospitalId || '—'}</td>
+                            <td>
+                              <button
+                                className="btn-outline"
+                                style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--c-danger)', borderColor: 'var(--c-danger)' }}
+                                onClick={async () => {
+                                  if (confirm(`Are you sure you want to delete ${u.username}?`)) {
+                                    await adminService.deleteUser(u.id);
+                                    setUsers(users.filter(x => x.id !== u.id));
+                                  }
+                                }}
+                              >
+                                Deactivate
+                              </button>
+                            </td>
                           </tr>
                         ))
                       )}

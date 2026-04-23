@@ -12,6 +12,7 @@ import com.fhir.hospitalA.model.HospitalAPatient;
 import com.fhir.hospitalA.repository.HospitalAOPConsultRepository;
 import com.fhir.hospitalA.repository.HospitalAPatientRepository;
 import com.fhir.shared.audit.AuditService;
+import com.fhir.shared.security.JwtUtil;
 import com.fhir.shared.validation.FHIRValidatorBundle;
 import com.fhir.shared.validation.FHIRValidatorUtil;
 import org.hl7.fhir.r4.model.Bundle;
@@ -52,6 +53,9 @@ public class HospitalAService {
 
     @Autowired
     private AuditService auditService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     // ── Patient to FHIR ──────────────────────────────────────────────────────
 
@@ -281,5 +285,64 @@ public class HospitalAService {
                 }
             }
         }
+    }
+
+    // ── HIE Gateway Support ──────────────────────────────────────────────────
+
+    /**
+     * Called by HIPFhirClient when HIE requests data.
+     * Validates consent JWT, fetches latest consult, applies existing
+     * granular filter, returns FHIR bundle JSON.
+     *
+     * STUB MODE: while SKIP_JWT_VALIDATION = true, skips token verification.
+     * Set to false once Person 1 delivers ConsentTokenService.
+     */
+    private static final boolean SKIP_JWT_VALIDATION = false; // flip to false after merge
+
+    @Transactional(readOnly = true)
+    public String pullFhirBundle(String patientId, String consentToken, Set<String> scope) {
+
+        if (!SKIP_JWT_VALIDATION) {
+            // Validate consent JWT — final trust enforcement at HIP
+            io.jsonwebtoken.Claims claims;
+            try {
+                claims = jwtUtil.parse(consentToken);
+            } catch (io.jsonwebtoken.JwtException e) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "Invalid consent token: " + e.getMessage());
+            }
+
+            String tokenType = claims.get("type", String.class);
+            if (!"consent".equals(tokenType)) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "Token is not a consent token");
+            }
+
+            String tokenPatient = claims.getSubject();
+            if (!patientId.equals(tokenPatient)) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "Consent token patient mismatch");
+            }
+        }
+
+        // Fetch latest consult record for this patient
+        HospitalAOPConsultEntity consult = consultRepository
+            .findFirstByPatientIdOrderByIdDesc(patientId)
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND,
+                "No consult record found for patient: " + patientId));
+
+        // Use existing mapper and filter — no duplication
+        HospitalAOPConsultRecordDTO dto = entityToDTO(consult);
+        org.hl7.fhir.r4.model.Bundle bundle =
+            HospitalAOPConsultToFhirMapper.mapToBundle(dto);
+        filterBundleByConsent(bundle, scope);
+
+        return fhirContext.newJsonParser()
+            .setPrettyPrint(true)
+            .encodeResourceToString(bundle);
     }
 }

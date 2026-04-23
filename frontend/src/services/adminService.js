@@ -112,4 +112,33 @@ export const adminService = {
       throw new Error('Failed to fetch system health');
     }
   },
+
+  // ── User Management ───────────────────────────────────────────────────────
+  getUsers: async () => {
+    try {
+      const res = await api.get('/admin/users');
+      return res.data;
+    } catch {
+      if (MOCK_ENABLED) return [];
+      throw new Error('Failed to fetch users');
+    }
+  },
+
+  createUser: async (userData) => {
+    try {
+      const res = await api.post('/admin/users', userData);
+      return res.data;
+    } catch {
+      if (MOCK_ENABLED) return { ...userData, id: Date.now() };
+      throw new Error('Failed to create user');
+    }
+  },
+
+  deleteUser: async (id) => {
+    try {
+      await api.delete(`/admin/users/${id}`);
+    } catch {
+      if (!MOCK_ENABLED) throw new Error('Failed to delete user');
+    }
+  },
 };

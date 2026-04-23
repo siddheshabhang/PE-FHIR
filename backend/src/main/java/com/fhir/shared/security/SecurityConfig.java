@@ -42,6 +42,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
                 .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/auth/refresh").permitAll()
+                .requestMatchers(HttpMethod.GET, "/hospitals").permitAll()
+
+                // ── Admin endpoints ─────────────────────────────────────────
+                .requestMatchers("/admin/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/hospitals/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/hospitals/**").hasRole("ADMIN")
 
                 // ── Swagger / OpenAPI ───────────────────────────────────────
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**",
@@ -61,6 +67,10 @@ public class SecurityConfig {
                     .hasRole("PATIENT")
                 .requestMatchers(HttpMethod.POST, "/hospitalA/**")
                     .hasAnyRole("ADMIN", "DOCTOR")
+
+                // ── Doctor endpoints ────────────────────────────────────────
+                .requestMatchers(HttpMethod.POST, "/doctor/patients")
+                    .hasRole("DOCTOR")
 
                 // ── Hospital B endpoints — ADMIN or DOCTOR only ─────────────
                 .requestMatchers(HttpMethod.POST, "/hospitalB/**")

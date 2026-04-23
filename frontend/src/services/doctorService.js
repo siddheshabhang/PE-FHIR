@@ -105,4 +105,26 @@ export const doctorService = {
       throw err;
     }
   },
+
+  /**
+   * POST /doctor/patients
+   * Doctor registers a new patient
+   */
+  createPatient: async (patientData) => {
+    try {
+      const res = await api.post('/doctor/patients', patientData);
+      return res.data;
+    } catch (err) {
+      if (MOCK_ENABLED) {
+        return {
+          message: 'Patient created successfully',
+          patientId: 'P-' + Math.floor(Math.random() * 9000 + 1000),
+          username: patientData.firstName.toLowerCase() + '.' + patientData.lastName.toLowerCase(),
+          tempPassword: 'password123',
+          hospitalId: 'HOSP-A',
+        };
+      }
+      throw err;
+    }
+  },
 };

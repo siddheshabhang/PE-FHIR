@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar.jsx';
 import { doctorService } from '../services/doctorService.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
+import { hieService } from '../services/hieService.js';
 
 const SIDEBAR_ITEMS = [
   { to: '/doctor/dashboard', label: 'Dashboard', icon: '📊', end: true },
@@ -64,6 +65,25 @@ const DoctorDashboard = () => {
   const [fhirLoading, setFhirLoading] = useState(false);
   const [fhirResult, setFhirResult] = useState(null);
   const [fhirError, setFhirError] = useState('');
+
+  // ── Create Patient ──────────────────────────────────────────────
+  const [createPatientForm, setCreatePatientForm] = useState({
+    firstName: '', lastName: '', dateOfBirth: '', gender: 'Male', phone: '', email: ''
+  });
+  const [createPatientErrors, setCreatePatientErrors] = useState({});
+  const [createPatientLoading, setCreatePatientLoading] = useState(false);
+  const [createPatientResult, setCreatePatientResult] = useState(null);
+  const [createPatientError, setCreatePatientError] = useState('');
+
+  // ── HIE Exchange ──────────────────────────────────────────────
+  const [hieForm, setHieForm] = useState({
+    patientId: '', scope: ['Diagnostics'], purpose: ''
+  });
+  const [hieLoading, setHieLoading] = useState(false);
+  const [hieStatus, setHieStatus] = useState(null);
+  const [hiePolling, setHiePolling] = useState(false);
+  const [hieFhirResult, setHieFhirResult] = useState('');
+  const [hieError, setHieError] = useState('');
 
   // ── Handlers ─────────────────────────────────────────────────
   const validateSubmit = () => {
@@ -157,10 +177,67 @@ const DoctorDashboard = () => {
     }
   };
 
+  const handleHieSubmit = async (e) => {
+    e.preventDefault();
+    if (!hieForm.patientId.trim()) return;
+    setHieLoading(true);
+    setHieError('');
+    setHieStatus(null);
+    setHieFhirResult('');
+    try {
+      const result = await hieService.requestExchange(
+        hieForm.patientId, hieForm.scope, hieForm.purpose
+      );
+      setHieStatus(result);
+      if (result.status === 'CONSENT_PENDING') {
+        startPolling(result.consentRequestId);
+      }
+      if (result.status === 'SUCCESS') {
+        setHieFhirResult(result.fhirBundle);
+      }
+    } catch (err) {
+      setHieError(err?.response?.data?.message || err.message || 'Exchange failed.');
+    } finally {
+      setHieLoading(false);
+    }
+  };
+
+  const startPolling = (consentId) => {
+    setHiePolling(true);
+    const interval = setInterval(async () => {
+      try {
+        const result = await hieService.pollStatus(consentId);
+        setHieStatus(result);
+        if (result.status === 'SUCCESS') {
+          setHieFhirResult(result.fhirBundle);
+          setHiePolling(false);
+          clearInterval(interval);
+        }
+        if (result.status === 'DENIED' || result.status === 'REVOKED') {
+          setHiePolling(false);
+          clearInterval(interval);
+        }
+      } catch {
+        setHiePolling(false);
+        clearInterval(interval);
+      }
+    }, 3000);
+  };
+
+  const toggleHieScope = (type) =>
+    setHieForm(p => ({
+      ...p,
+      scope: p.scope.includes(type)
+        ? p.scope.filter(t => t !== type)
+        : [...p.scope, type],
+    }));
+
   const PANELS = [
     { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital A → FHIR' },
     { id: 'consent', label: 'Request Consent', icon: '🔒', subtitle: 'Initiate access request' },
     { id: 'receive', label: 'Receive Bundle', icon: '📥', subtitle: 'Hospital B intake' },
+    { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
+    { id: 'create_patient', label: 'Add Patient', icon: '🧑‍⚕️', subtitle: 'Register a new patient' },
   ];
 
   return (
@@ -448,6 +525,194 @@ const DoctorDashboard = () => {
                       </motion.div>
                     )}
                   </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+
+            {activePanel === 'hie' && (
+              <motion.div
+                key="hie"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar panel-accent-bar--teal" />
+                  <div className="panel-icon panel-icon--teal">🔗</div>
+                  <div>
+                    <div className="panel-title">Request Data via HIE Gateway</div>
+                    <div className="panel-subtitle">
+                      Federated pull — patient consent obtained before data moves
+                    </div>
+                  </div>
+                </div>
+
+                <div className="submit-form">
+                  {hieError && <div className="alert-error">⚠️ {hieError}</div>}
+
+                  {hieStatus && hieStatus.status === 'CONSENT_PENDING' && (
+                    <div className="alert-info">
+                      ⏳ Consent request #{hieStatus.consentRequestId} sent to patient.
+                      {hiePolling ? ' Waiting for approval…' : ' Polling stopped.'}
+                    </div>
+                  )}
+
+                  {hieStatus && hieStatus.status === 'DENIED' && (
+                    <div className="alert-error">❌ Patient denied this consent request.</div>
+                  )}
+
+                  <form onSubmit={handleHieSubmit}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Patient ID</label>
+                        <input
+                          className="form-input"
+                          placeholder="e.g. P-1001"
+                          value={hieForm.patientId}
+                          onChange={e => setHieForm({ ...hieForm, patientId: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Purpose</label>
+                        <input
+                          className="form-input"
+                          placeholder="e.g. Follow-up consultation"
+                          value={hieForm.purpose}
+                          onChange={e => setHieForm({ ...hieForm, purpose: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Data scope requested</label>
+                        <div className="consent-types-row">
+                          {['Diagnostics', 'Medications', 'LabResults', 'Allergies', 'SurgicalHistory'].map(type => (
+                            <label key={type} className="consent-type-check">
+                              <input
+                                type="checkbox"
+                                checked={hieForm.scope.includes(type)}
+                                onChange={() => toggleHieScope(type)}
+                              />
+                              {type}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={hieLoading || hiePolling}
+                      >
+                        {hieLoading ? <><span className="btn-spinner" /> Initiating…</>
+                          : hiePolling ? '⏳ Waiting for patient consent…'
+                          : '🔗 Request via HIE'}
+                      </button>
+                    </div>
+                  </form>
+
+                  {hieFhirResult && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      style={{ marginTop: '16px' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                        <span style={{
+                          fontFamily: "'Syne', sans-serif", fontWeight: '700',
+                          fontSize: '14px', color: 'var(--c-success-text)'
+                        }}>
+                          ✅ Data received from Hospital A
+                        </span>
+                      </div>
+                      <div className="fhir-json-section">
+                        <span className="fhir-json-label">FHIR Bundle</span>
+                        <pre className="fhir-json">
+                          {JSON.stringify(JSON.parse(hieFhirResult), null, 2)}
+                        </pre>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Create Patient Panel ─────────────────────────────── */}
+            {activePanel === 'create_patient' && (
+              <motion.div
+                key="create_patient"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar" style={{ background: 'var(--c-primary)' }} />
+                  <div className="panel-icon" style={{ color: 'var(--c-primary)' }}>🧑‍⚕️</div>
+                  <div>
+                    <div className="panel-title">Register New Patient</div>
+                    <div className="panel-subtitle">Create a patient record and generate login credentials</div>
+                  </div>
+                </div>
+
+                <div className="submit-form">
+                  <AnimatePresence>
+                    {createPatientResult && (
+                      <motion.div className="alert-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <div style={{ marginBottom: '8px' }}>✅ <strong>{createPatientResult.message}</strong></div>
+                        <div className="detail-grid">
+                          <div className="detail-row"><span className="detail-label">Patient ID:</span> <span className="detail-value">{createPatientResult.patientId}</span></div>
+                          <div className="detail-row"><span className="detail-label">Username:</span> <span className="detail-value" style={{fontFamily: 'monospace'}}>{createPatientResult.username}</span></div>
+                          <div className="detail-row"><span className="detail-label">Password:</span> <span className="detail-value" style={{fontFamily: 'monospace'}}>{createPatientResult.tempPassword}</span></div>
+                        </div>
+                      </motion.div>
+                    )}
+                    {createPatientError && (
+                      <motion.div className="alert-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        ⚠️ {createPatientError}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    setCreatePatientLoading(true); setCreatePatientError(''); setCreatePatientResult(null);
+                    try {
+                      const res = await doctorService.createPatient(createPatientForm);
+                      setCreatePatientResult(res);
+                      setCreatePatientForm({ firstName: '', lastName: '', dateOfBirth: '', gender: 'Male', phone: '', email: '' });
+                    } catch (err) {
+                      setCreatePatientError(err?.response?.data?.message || err.message || 'Failed to create patient.');
+                    } finally {
+                      setCreatePatientLoading(false);
+                    }
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                      <div className="form-row">
+                        <FieldRow label="First Name" name="firstName" placeholder="First Name" value={createPatientForm.firstName} onChange={(e) => setCreatePatientForm(f => ({...f, firstName: e.target.value}))} />
+                        <FieldRow label="Last Name" name="lastName" placeholder="Last Name" value={createPatientForm.lastName} onChange={(e) => setCreatePatientForm(f => ({...f, lastName: e.target.value}))} />
+                      </div>
+                      <div className="form-row">
+                        <FieldRow label="Date of Birth" name="dateOfBirth" type="date" value={createPatientForm.dateOfBirth} onChange={(e) => setCreatePatientForm(f => ({...f, dateOfBirth: e.target.value}))} />
+                        <div className="form-group">
+                          <label className="form-label">Gender</label>
+                          <select className="form-input" value={createPatientForm.gender} onChange={(e) => setCreatePatientForm(f => ({...f, gender: e.target.value}))}>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <FieldRow label="Phone" name="phone" placeholder="Phone Number" value={createPatientForm.phone} onChange={(e) => setCreatePatientForm(f => ({...f, phone: e.target.value}))} />
+                        <FieldRow label="Email" name="email" type="email" placeholder="Email Address" value={createPatientForm.email} onChange={(e) => setCreatePatientForm(f => ({...f, email: e.target.value}))} />
+                      </div>
+                      
+                      <button type="submit" className="btn-primary" disabled={createPatientLoading}>
+                        {createPatientLoading ? '⏳ Registering…' : '✅ Add Patient'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </motion.div>
             )}

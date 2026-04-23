@@ -47,6 +47,9 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRole(request.getRole());
         user.setPatientId(request.getPatientId());
+        user.setHospitalId(request.getHospitalId());
+        user.setFullName(request.getFullName());
+        user.setSpecialization(request.getSpecialization());
 
         return userRepository.save(user);
     }
@@ -102,6 +105,7 @@ public class AuthService {
                 "sub",       user.getUsername(),
                 "role",      user.getRole().name(),
                 "patientId", user.getPatientId() != null ? user.getPatientId() : "",
+                "hospitalId",user.getHospitalId() != null ? user.getHospitalId() : "",
                 "type",      "access"
         );
         return jwtUtil.sign(claims, accessTokenExpiry);

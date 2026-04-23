@@ -30,6 +30,15 @@ public class AppUser {
     @Column
     private String patientId;
 
+    @Column
+    private String hospitalId;
+
+    @Column
+    private String fullName;
+
+    @Column
+    private String specialization;
+
     /**
      * Bcrypt hash of the last issued refresh token.
      * Cleared on logout; replaced on every /auth/refresh call.

@@ -6,13 +6,10 @@ import com.fhir.auth.repository.AuthUserRepository;
 import com.fhir.auth.service.AuthService;
 import com.fhir.hospitalA.model.HospitalAOPConsultEntity;
 import com.fhir.hospitalA.repository.HospitalAOPConsultRepository;
-<<<<<<< HEAD
 import com.fhir.identity.model.GlobalPatientIdentity;
 import com.fhir.identity.repository.GlobalPatientIdentityRepository;
-=======
 import com.fhir.shared.hospital.Hospital;
 import com.fhir.shared.hospital.HospitalRepository;
->>>>>>> 9236203 (Add HIE federated exchange and multi-hospital persistence support)
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -32,11 +29,10 @@ public class DatabaseSeeder implements CommandLineRunner {
     private HospitalAOPConsultRepository consultRepository;
 
     @Autowired
-<<<<<<< HEAD
     private GlobalPatientIdentityRepository globalPatientIdentityRepository;
-=======
+
+    @Autowired
     private HospitalRepository hospitalRepository;
->>>>>>> 9236203 (Add HIE federated exchange and multi-hospital persistence support)
 
     @Override
     public void run(String... args) throws Exception {

@@ -77,7 +77,7 @@ const DoctorDashboard = () => {
 
   // ── HIE Exchange ──────────────────────────────────────────────
   const [hieForm, setHieForm] = useState({
-    patientId: '', scope: ['Diagnostics'], purpose: ''
+    patientId: '', scope: ['OP_CONSULT'], purpose: ''
   });
   const [hieLoading, setHieLoading] = useState(false);
   const [hieStatus, setHieStatus] = useState(null);
@@ -194,9 +194,53 @@ const DoctorDashboard = () => {
       }
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
+        // Auto-persist even if success is immediate (consent already exists)
+        try {
+          await doctorService.receiveFhirAtHospitalB(result.fhirBundle);
+        } catch (persistErr) {
+          console.error('Auto-persistence failed:', persistErr);
+        }
       }
     } catch (err) {
       setHieError(err?.response?.data?.message || err.message || 'Exchange failed.');
+    } finally {
+      setHieLoading(false);
+    }
+  };
+
+  const handleConsentOnly = async (e) => {
+    e.preventDefault();
+    if (!hieForm.patientId) return setHieError('Patient ID required.');
+    setHieLoading(true);
+    setHieError(null);
+    try {
+      const result = await hieService.initiateConsentOnly(hieForm.patientId, hieForm.scope, hieForm.purpose);
+      setHieStatus(result);
+      if (result.status === 'CONSENT_PENDING') {
+        startPolling(result.consentRequestId);
+      }
+    } catch (err) {
+      setHieError(err?.response?.data?.message || 'Consent request failed.');
+    } finally {
+      setHieLoading(false);
+    }
+  };
+
+  const handlePullOnly = async (e) => {
+    e.preventDefault();
+    if (!hieForm.patientId) return setHieError('Patient ID required.');
+    setHieLoading(true);
+    setHieError(null);
+    try {
+      const result = await hieService.pullOnly(hieForm.patientId, hieForm.scope);
+      if (result.status === 'SUCCESS') {
+        setHieFhirResult(result.fhirBundle);
+        try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); } catch (e) {}
+      } else {
+        setHieError(result.message || 'No active consent found.');
+      }
+    } catch (err) {
+      setHieError(err?.response?.data?.message || 'Pull failed.');
     } finally {
       setHieLoading(false);
     }
@@ -212,14 +256,24 @@ const DoctorDashboard = () => {
           setHieFhirResult(result.fhirBundle);
           setHiePolling(false);
           clearInterval(interval);
+          
+          // Auto-persist to Hospital B internal DB
+          try {
+            await doctorService.receiveFhirAtHospitalB(result.fhirBundle);
+          } catch (persistErr) {
+            console.error('Auto-persistence failed:', persistErr);
+          }
         }
         if (result.status === 'DENIED' || result.status === 'REVOKED') {
           setHiePolling(false);
           clearInterval(interval);
         }
-      } catch {
+      } catch (err) {
         setHiePolling(false);
         clearInterval(interval);
+        const msg = err?.response?.data?.message || err?.message || 'Try clicking "Pull Data" manually.';
+        setHieError(`Polling stopped: ${msg}`);
+        console.error('Poll error:', err?.response?.data || err);
       }
     }, 3000);
   };
@@ -586,26 +640,72 @@ const DoctorDashboard = () => {
                       <div className="form-group">
                         <label className="form-label">Data scope requested</label>
                         <div className="consent-types-row">
-                          {['Diagnostics', 'Medications', 'LabResults', 'Allergies', 'SurgicalHistory'].map(type => (
+                          {['OP_CONSULT', 'PRESCRIPTION', 'LAB_RESULT'].map(type => (
                             <label key={type} className="consent-type-check">
                               <input
                                 type="checkbox"
                                 checked={hieForm.scope.includes(type)}
                                 onChange={() => toggleHieScope(type)}
                               />
-                              {type}
+                              {type.replace(/_/g, ' ')}
                             </label>
                           ))}
                         </div>
                       </div>
+                      <div className="form-group" style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{ 
+                            flex: 1, 
+                            background: 'var(--c-accent)', 
+                            borderColor: 'var(--c-accent)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                          }}
+                          onClick={handleConsentOnly}
+                          disabled={hieLoading || hiePolling}
+                        >
+                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>🔒</span> 1. Request Consent</>}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{ 
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                          }}
+                          onClick={handlePullOnly}
+                          disabled={hieLoading || hiePolling}
+                        >
+                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>📥</span> 2. Pull Data</>}
+                        </button>
+                      </div>
+                      
+                      <div style={{ textAlign: 'center', opacity: 0.4, fontSize: '11px', margin: '8px 0', letterSpacing: '1px' }}>— OR —</div>
+
                       <button
                         type="submit"
                         className="btn-primary"
+                        style={{ 
+                          width: '100%', 
+                          background: 'transparent', 
+                          border: '1px dashed var(--c-primary)', 
+                          color: 'var(--c-primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px'
+                        }}
                         disabled={hieLoading || hiePolling}
                       >
-                        {hieLoading ? <><span className="btn-spinner" /> Initiating…</>
-                          : hiePolling ? '⏳ Waiting for patient consent…'
-                          : '🔗 Request via HIE'}
+                        {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>🔗</span> Auto Orchestrate (1 + 2)</>}
                       </button>
                     </div>
                   </form>
@@ -627,7 +727,14 @@ const DoctorDashboard = () => {
                       <div className="fhir-json-section">
                         <span className="fhir-json-label">FHIR Bundle</span>
                         <pre className="fhir-json">
-                          {JSON.stringify(JSON.parse(hieFhirResult), null, 2)}
+                          {(() => {
+                            try {
+                              const parsed = typeof hieFhirResult === 'string' ? JSON.parse(hieFhirResult) : hieFhirResult;
+                              return JSON.stringify(parsed, null, 2);
+                            } catch (e) {
+                              return hieFhirResult;
+                            }
+                          })()}
                         </pre>
                       </div>
                     </motion.div>

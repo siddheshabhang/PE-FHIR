@@ -20,6 +20,7 @@ import java.util.Map;
         "com.fhir.consent.repository",
         "com.fhir.identity.repository",
         "com.fhir.shared.audit",
+        "com.fhir.shared.hospital",
         "com.fhir.admin"
     },
     entityManagerFactoryRef = "fhirMainEntityManagerFactory",
@@ -38,7 +39,8 @@ public class FhirMainJpaConfig {
                 "com.fhir.auth.model",
                 "com.fhir.consent.model",
                 "com.fhir.identity.model",
-                "com.fhir.shared.audit"
+                "com.fhir.shared.audit",
+                "com.fhir.shared.hospital"
             )
             .persistenceUnit("fhirMain")
             .properties(Map.of(

@@ -25,6 +25,6 @@ public class ConsentTokenService {
             "consentId",   consent.getId(),
             "type",        "consent"
         );
-        return jwtUtil.sign(claims, CONSENT_TOKEN_EXPIRY_SECONDS);
+        return jwtUtil.sign(claims, CONSENT_TOKEN_EXPIRY_SECONDS, consent.getPatientId());
     }
 }

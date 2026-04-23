@@ -33,7 +33,6 @@ public class HospitalAOPConsultEntity {
     private double temperature;
     private String bloodPressure;
     
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String prescriptionPdfBase64;
     

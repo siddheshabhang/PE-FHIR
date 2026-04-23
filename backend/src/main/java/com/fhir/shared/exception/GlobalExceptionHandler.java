@@ -61,8 +61,9 @@ public class GlobalExceptionHandler {
     // ── Catch-all ─────────────────────────────────────────────────────────────
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleAll(Exception ex) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",
-                "An unexpected error occurred");
+        ex.printStackTrace(); // expose in server logs
+        String detail = ex.getClass().getSimpleName() + ": " + ex.getMessage();
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", detail);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────

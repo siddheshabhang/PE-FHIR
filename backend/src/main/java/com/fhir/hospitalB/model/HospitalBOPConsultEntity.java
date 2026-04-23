@@ -25,7 +25,6 @@ public class HospitalBOPConsultEntity {
     private String bloodPressure;
     private String temperature;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String prescriptionPdfBase64;
 

@@ -33,7 +33,13 @@ public class HospitalAOPConsultToFhirMapper {
         // ── Encounter ────────────────────────────────────────────────────────
         Date visitDate;
         try {
-            LocalDate parsed = LocalDate.parse(dto.getVisitDate(), VISIT_DATE_FORMAT);
+            // Try ISO format first (yyyy-MM-dd from seeder), then dd/MM/yyyy from frontend
+            LocalDate parsed;
+            try {
+                parsed = LocalDate.parse(dto.getVisitDate(), DateTimeFormatter.ISO_LOCAL_DATE);
+            } catch (Exception e1) {
+                parsed = LocalDate.parse(dto.getVisitDate(), VISIT_DATE_FORMAT);
+            }
             visitDate = Date.from(parsed.atStartOfDay(ZoneId.systemDefault()).toInstant());
         } catch (Exception e) {
             // If visitDate is null or malformed, fall back to today
@@ -146,12 +152,16 @@ public class HospitalAOPConsultToFhirMapper {
 
         if (dto.getPrescriptionPdfBase64() != null
                 && !dto.getPrescriptionPdfBase64().isBlank()) {
-            Attachment attachment = new Attachment();
-            attachment.setContentType("application/pdf");
-            attachment.setData(
-                    Base64.getDecoder().decode(dto.getPrescriptionPdfBase64())
-            );
-            docRef.addContent().setAttachment(attachment);
+            try {
+                byte[] pdfBytes = Base64.getDecoder().decode(
+                        dto.getPrescriptionPdfBase64().trim());
+                Attachment attachment = new Attachment();
+                attachment.setContentType("application/pdf");
+                attachment.setData(pdfBytes);
+                docRef.addContent().setAttachment(attachment);
+            } catch (IllegalArgumentException ignored) {
+                // Invalid Base64 — skip PDF attachment but keep the DocumentReference
+            }
         }
 
         // ── Consent ────────────────────────────────────────────────────────────────────

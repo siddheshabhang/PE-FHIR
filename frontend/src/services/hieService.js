@@ -35,6 +35,27 @@ export const hieService = {
     }
   },
 
+  initiateConsentOnly: async (patientId, scope, purpose) => {
+    const res = await api.post('/hie/consent-only', {
+      patientId,
+      hip: 'HospitalA',
+      hiu: 'HospitalB',
+      scope,
+      purpose: purpose || 'Manual HIE Consent Request',
+    });
+    return res.data;
+  },
+
+  pullOnly: async (patientId, scope) => {
+    const res = await api.post('/hie/pull-only', {
+      patientId,
+      hip: 'HospitalA',
+      hiu: 'HospitalB',
+      scope,
+    });
+    return res.data;
+  },
+
   /**
    * GET /hie/exchange/status/{consentId}
    * Returns ExchangeResponseDTO with current status

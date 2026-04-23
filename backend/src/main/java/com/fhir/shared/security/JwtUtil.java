@@ -32,10 +32,11 @@ public class JwtUtil {
      * @param expirySeconds how long the token is valid
      * @return signed compact JWT
      */
-    public String sign(Map<String, Object> claims, long expirySeconds) {
+    public String sign(Map<String, Object> claims, long expirySeconds, String subject) {
         long nowMs = System.currentTimeMillis();
         return Jwts.builder()
                 .claims(claims)
+                .subject(subject)
                 .issuedAt(new Date(nowMs))
                 .expiration(new Date(nowMs + expirySeconds * 1000))
                 .signWith(signingKey)

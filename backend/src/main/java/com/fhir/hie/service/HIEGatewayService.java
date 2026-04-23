@@ -49,8 +49,13 @@ public class HIEGatewayService {
             request.getPatientId(), requesterId);
 
         if (!grantedTypes.isEmpty()) {
-            // Consent already granted — pull data immediately
-            return pullAndReturn(request, requesterId, grantedTypes);
+            try {
+                // Consent exists — try to pull data
+                return pullAndReturn(request, requesterId, grantedTypes);
+            } catch (Exception e) {
+                // If pull fails (e.g. token expired/invalid), fallback to initiating a new request
+                System.out.println("⚠️ Existing consent failed (likely expired). Initiating fresh request. Error: " + e.getMessage());
+            }
         }
 
         // Step 3: No consent — create request and notify patient
@@ -109,24 +114,73 @@ public class HIEGatewayService {
             .build();
     }
 
+    /**
+     * Phase 1: Explicitly request consent from patient.
+     */
+    public ExchangeResponseDTO initiateConsentOnly(ExchangeRequestDTO request) {
+        String requesterId = securityContextHelper.getCurrentUsername();
+        
+        InitiateConsentDTO initiateDTO = new InitiateConsentDTO();
+        initiateDTO.setPatientId(request.getPatientId());
+        initiateDTO.setPurpose(request.getPurpose() != null ? request.getPurpose() : "Manual HIE Consent Request");
+        initiateDTO.setRequestedDataTypes(request.getScope());
+
+        ConsentRequestViewDTO consent = consentStore.initiateRequest(initiateDTO, requesterId);
+        notificationService.notifyPatientConsentRequest(request.getPatientId(), consent.getId());
+
+        return ExchangeResponseDTO.builder()
+            .status("CONSENT_PENDING")
+            .consentRequestId(consent.getId())
+            .message("Consent request #" + consent.getId() + " sent. Ask patient to approve.")
+            .build();
+    }
+
+    /**
+     * Phase 2: Pull data only if consent is already GRANTED.
+     */
+    public ExchangeResponseDTO pullClinicalData(ExchangeRequestDTO request) {
+        String requesterId = securityContextHelper.getCurrentUsername();
+
+        Set<String> grantedTypes = consentStore.getActiveGrantedDataTypes(request.getPatientId(), requesterId);
+        if (grantedTypes.isEmpty()) {
+            return ExchangeResponseDTO.builder()
+                .status("NO_CONSENT")
+                .message("No active consent found. Please request consent first.")
+                .build();
+        }
+
+        return pullAndReturn(request, requesterId, grantedTypes);
+    }
+
     private ExchangeResponseDTO pullAndReturn(
             ExchangeRequestDTO request,
             String requesterId,
             Set<String> grantedTypes) {
 
         // Fetch the consent token from the latest GRANTED consent
+        // Fetch the latest GRANTED consent (highest ID)
         List<ConsentRequestEntity> granted = consentRequestRepository
             .findByPatientIdAndRequesterIdAndStatus(
                 request.getPatientId(), requesterId, ConsentStatus.GRANTED);
+        
+        if (granted.isEmpty()) {
+            return ExchangeResponseDTO.builder()
+                .status("NO_CONSENT")
+                .message("No consent found.")
+                .build();
+        }
 
-        if (granted.isEmpty() || granted.get(0).getConsentToken() == null) {
+        // Pick the LATEST one to avoid "zombie" old consents
+        ConsentRequestEntity latestConsent = granted.get(granted.size() - 1);
+
+        if (latestConsent.getConsentToken() == null) {
             return ExchangeResponseDTO.builder()
                 .status("NO_CONSENT_TOKEN")
                 .message("Consent exists but token not yet generated. Retry.")
                 .build();
         }
 
-        String consentToken = granted.get(0).getConsentToken();
+        String consentToken = latestConsent.getConsentToken();
 
         Long auditId = auditService.logPending(
             request.getPatientId(),
@@ -141,6 +195,7 @@ public class HIEGatewayService {
                 request.getPatientId(), consentToken, grantedTypes);
 
             auditService.markSuccess(auditId);
+            System.out.println("✅ HIE Gateway: Successfully pulled FHIR bundle. Length: " + fhirBundle.length());
 
             return ExchangeResponseDTO.builder()
                 .status("SUCCESS")

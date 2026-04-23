@@ -255,6 +255,7 @@ public class HospitalAService {
 
         // Optional clinical types gated by consent grants
         if (grantedDataTypes != null) {
+            // Legacy scope names
             if (grantedDataTypes.contains("Medications")) {
                 allowed.add("Medication");
                 allowed.add("MedicationRequest");
@@ -272,6 +273,20 @@ public class HospitalAService {
             }
             if (grantedDataTypes.contains("Allergies")) {
                 allowed.add("AllergyIntolerance");
+            }
+            // New canonical scope names
+            if (grantedDataTypes.contains("OP_CONSULT")) {
+                allowed.add("Observation"); // vitals + symptoms
+                allowed.add("DiagnosticReport");
+            }
+            if (grantedDataTypes.contains("PRESCRIPTION")) {
+                allowed.add("Medication");
+                allowed.add("MedicationRequest");
+                allowed.add("MedicationStatement");
+            }
+            if (grantedDataTypes.contains("LAB_RESULT")) {
+                allowed.add("Observation");
+                allowed.add("DiagnosticReport");
             }
         }
 

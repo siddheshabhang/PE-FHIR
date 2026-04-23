@@ -108,7 +108,7 @@ public class AuthService {
                 "hospitalId",user.getHospitalId() != null ? user.getHospitalId() : "",
                 "type",      "access"
         );
-        return jwtUtil.sign(claims, accessTokenExpiry);
+        return jwtUtil.sign(claims, accessTokenExpiry, user.getUsername());
     }
 
     private String buildAndStoreRefreshToken(AppUser user) {
@@ -119,7 +119,7 @@ public class AuthService {
                 "jti",  jti,
                 "type", "refresh"
         );
-        String rawToken = jwtUtil.sign(claims, refreshTokenExpiry);
+        String rawToken = jwtUtil.sign(claims, refreshTokenExpiry, user.getUsername());
         // ✅ FIX: hash only the jti (UUID), not the full JWT — BCrypt has a 72-byte limit
         user.setRefreshTokenHash(passwordEncoder.encode(jti));
         userRepository.save(user);

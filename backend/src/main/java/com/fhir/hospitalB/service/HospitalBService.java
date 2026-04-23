@@ -70,4 +70,8 @@ public class HospitalBService {
 
         return dto;
     }
+
+    public java.util.List<HospitalBOPConsultEntity> getAllConsults() {
+        return consultRepository.findAll();
+    }
 }

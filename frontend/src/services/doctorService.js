@@ -127,4 +127,18 @@ export const doctorService = {
       throw err;
     }
   },
+
+  /**
+   * GET /hospitalB/op-consult
+   * Returns list of HospitalBOPConsultEntity
+   */
+  getHospitalBConsults: async () => {
+    try {
+      const res = await api.get('/hospitalB/op-consult');
+      return res.data;
+    } catch {
+      if (MOCK_ENABLED) return [];
+      throw new Error('Failed to fetch Hospital B intake records');
+    }
+  },
 };

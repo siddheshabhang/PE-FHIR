@@ -43,4 +43,9 @@ public class AuditService {
             repository.save(log);
         });
     }
+
+    @Transactional(readOnly = true)
+    public java.util.List<TransferAuditLog> getPatientAuditLogs(String patientId) {
+        return repository.findByPatientIdOrderByTimestampDesc(patientId);
+    }
 }

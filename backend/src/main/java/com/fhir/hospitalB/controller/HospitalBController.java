@@ -32,4 +32,9 @@ public class HospitalBController {
     public HospitalBOPConsultRecordDTO receiveFhirBundle(@RequestBody String fhirJson) {
         return hospitalBService.receiveFhirBundle(fhirJson);
     }
+
+    @GetMapping("/op-consult")
+    public java.util.List<com.fhir.hospitalB.model.HospitalBOPConsultEntity> getAllConsults() {
+        return hospitalBService.getAllConsults();
+    }
 }

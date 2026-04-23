@@ -107,4 +107,18 @@ export const patientService = {
       throw err;
     }
   },
+
+  /**
+   * GET /patient/audit/{patientId}
+   * Returns list of TransferAuditLog for this patient.
+   */
+  getAuditLogs: async (patientId) => {
+    try {
+      const res = await api.get(`/patient/audit/${patientId}`);
+      return res.data;
+    } catch {
+      if (MOCK_ENABLED) return [];
+      throw new Error('Failed to fetch activity logs');
+    }
+  },
 };

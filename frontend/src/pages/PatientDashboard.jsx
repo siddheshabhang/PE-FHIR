@@ -40,10 +40,11 @@ const PatientDashboard = () => {
   const [grantedTypes, setGrantedTypes] = useState({});
   const [consentLoading, setConsentLoading] = useState({});
   const [consentMsg, setConsentMsg] = useState({ id: null, text: '', ok: true });
-  const [timeline, setTimeline] = useState([]);
   const [pushForm, setPushForm] = useState({ targetRequesterId: '', dataTypes: ['OP_CONSULT'] });
   const [pushLoading, setPushLoading] = useState(false);
   const [pushResult, setPushResult] = useState('');
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   useEffect(() => {
     if (!patientId) { setLoading(false); return; }
@@ -60,9 +61,6 @@ const PatientDashboard = () => {
       .finally(() => setLoading(false));
   }, [patientId]);
 
-  const addTimeline = (action, requesterId) =>
-    setTimeline((p) => [{ timestamp: new Date().toISOString(), action, target: requesterId }, ...p]);
-
   const handleRespond = async (consent, grant) => {
     setConsentLoading((p) => ({ ...p, [consent.id]: true }));
     setConsentMsg({ id: null, text: '', ok: true });
@@ -70,12 +68,12 @@ const PatientDashboard = () => {
       const types = grantedTypes[consent.id] || ['OP_CONSULT'];
       const updated = await patientService.respondToConsent(consent.id, grant, types);
       setConsents((p) => p.map((c) => (c.id === consent.id ? { ...c, ...updated } : c)));
-      addTimeline(grant ? 'GRANTED' : 'DENIED', consent.requesterId);
       setConsentMsg({
         id: consent.id,
         text: `Consent ${grant ? 'granted' : 'denied'} for ${consent.requesterId}`,
         ok: grant,
       });
+      fetchActivity();
     } catch (err) {
       setConsentMsg({ id: consent.id, text: err?.response?.data?.message || 'Failed to respond.', ok: false });
     } finally {
@@ -88,8 +86,8 @@ const PatientDashboard = () => {
     try {
       await patientService.revokeConsent(consent.id);
       setConsents((p) => p.map((c) => (c.id === consent.id ? { ...c, status: 'REVOKED' } : c)));
-      addTimeline('REVOKED', consent.requesterId);
       setConsentMsg({ id: consent.id, text: `Consent revoked for ${consent.requesterId}`, ok: false });
+      fetchActivity();
     } catch (err) {
       setConsentMsg({ id: consent.id, text: err?.response?.data?.message || 'Failed to revoke.', ok: false });
     } finally {
@@ -109,14 +107,35 @@ const PatientDashboard = () => {
     setPushLoading(true); setPushResult('');
     try {
       const msg = await patientService.pushRecords(pushForm.targetRequesterId, pushForm.dataTypes);
-      setPushResult(`✅ ${msg || 'Records pushed successfully!'}`);
+      const displayMsg = (typeof msg === 'object') ? (msg.message || 'Records pushed successfully!') : (msg || 'Records pushed successfully!');
+      setPushResult(`✅ ${displayMsg}`);
       setPushForm({ targetRequesterId: '', dataTypes: ['OP_CONSULT'] });
+      fetchActivity();
     } catch (err) {
       setPushResult(`⚠️ ${err?.response?.data?.message || err.message || 'Push failed.'}`);
     } finally {
       setPushLoading(false);
     }
   };
+
+  const fetchActivity = async () => {
+    if (!patientId) return;
+    setActivityLoading(true);
+    try {
+      const data = await patientService.getAuditLogs(patientId);
+      setActivityLogs(data);
+    } catch (e) {
+      console.error('Failed to fetch activity logs:', e);
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchActivity();
+    }
+  }, [activeTab, patientId]);
 
   const togglePushType = (type) =>
     setPushForm((p) => ({
@@ -131,7 +150,6 @@ const PatientDashboard = () => {
 
   return (
     <div className="dashboard-layout">
-      {/* Inline sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">⚕️</div>
@@ -187,7 +205,6 @@ const PatientDashboard = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
           >
-            {/* Summary */}
             <div className="stats-grid stats-grid--3">
               <div className="stat-card stat-card--amber">
                 <div className="stat-icon">⏳</div>
@@ -212,7 +229,6 @@ const PatientDashboard = () => {
               </div>
             )}
 
-            {/* ── Consent Tab ─────────────────────────────────────────── */}
             {activeTab === 'consent' && (
               <AnimatePresence mode="wait">
                 <motion.div key="consent" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -256,7 +272,6 @@ const PatientDashboard = () => {
                               </span>
                             </div>
 
-                            {/* Actions for PENDING */}
                             {c.status === 'PENDING' && (
                               <div className="consent-action-area">
                                 <span className="consent-type-label">Select data types to grant access:</span>
@@ -290,7 +305,6 @@ const PatientDashboard = () => {
                               </div>
                             )}
 
-                            {/* Actions for GRANTED */}
                             {c.status === 'GRANTED' && (
                               <div className="consent-action-area">
                                 <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginBottom: '10px' }}>
@@ -304,7 +318,6 @@ const PatientDashboard = () => {
                               </div>
                             )}
 
-                            {/* Inline feedback */}
                             <AnimatePresence>
                               {hasMsg && (
                                 <motion.div
@@ -327,7 +340,6 @@ const PatientDashboard = () => {
               </AnimatePresence>
             )}
 
-            {/* ── Push Data Tab ───────────────────────────────────────── */}
             {activeTab === 'transfer' && (
               <motion.div className="card" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <div className="card-header">
@@ -377,39 +389,50 @@ const PatientDashboard = () => {
               </motion.div>
             )}
 
-            {/* ── Activity Log Tab ────────────────────────────────────── */}
             {activeTab === 'history' && (
               <motion.div className="card" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <div className="card-header">
                   <div>
                     <div className="card-title">🕐 Session Activity Log</div>
-                    <div className="card-subtitle">Actions taken during this session (resets on page refresh)</div>
+                    <div className="card-subtitle">Persistent history of data exchanges from the HIE Gateway</div>
                   </div>
                 </div>
                 <div style={{ padding: '20px 22px' }}>
-                  {timeline.length === 0 ? (
+                  {activityLoading ? (
+                    <div style={{ padding: '40px', textAlign: 'center' }}>
+                      <LoadingSpinner message="Fetching history..." />
+                    </div>
+                  ) : activityLogs.length === 0 ? (
                     <div className="empty-state" style={{ padding: '32px' }}>
                       <div className="empty-icon">📋</div>
-                      <div className="empty-title">No activity yet</div>
-                      <div className="empty-desc">Grant, deny, or revoke consent requests to see activity here.</div>
+                      <div className="empty-title">No activity history</div>
+                      <div className="empty-desc">Your clinical data exchange history will appear here.</div>
                     </div>
                   ) : (
                     <div className="timeline">
-                      {timeline.map((item, i) => (
-                        <div key={i} className="timeline-item">
-                          <div className={`timeline-dot ${item.action === 'GRANTED' ? 'timeline-dot--green'
-                            : item.action === 'DENIED' ? 'timeline-dot--amber'
+                      {activityLogs.map((item, i) => (
+                        <div key={item.id || i} className="timeline-item">
+                          <div className={`timeline-dot ${item.status === 'SUCCESS' ? 'timeline-dot--green'
+                            : item.status === 'PENDING' ? 'timeline-dot--amber'
                               : 'timeline-dot--red'
                             }`} />
                           <div className="timeline-content">
-                            <span className={`timeline-action ${item.action === 'GRANTED' ? 'action-grant'
-                              : item.action === 'DENIED' ? 'action-deny'
-                                : 'action-revoke'
-                              }`}>
-                              {item.action}
-                            </span>
-                            <span className="timeline-target">{item.target}</span>
-                            <span className="timeline-time">{new Date(item.timestamp).toLocaleString()}</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div>
+                                <span className={`timeline-action ${item.status === 'SUCCESS' ? 'action-grant'
+                                  : item.status === 'PENDING' ? 'action-deny'
+                                    : 'action-revoke'
+                                  }`}>
+                                  {item.status}
+                                </span>
+                                <span className="timeline-target">Source: {item.sourceHospital} → Target: {item.targetHospital}</span>
+                              </div>
+                              <span className="timeline-time">{new Date(item.timestamp).toLocaleString()}</span>
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginTop: '4px' }}>
+                              Resources transferred: {item.bundleResourceCount}
+                              {item.failureReason && <div style={{ color: 'var(--c-error-text)', marginTop: '2px' }}>Reason: {item.failureReason}</div>}
+                            </div>
                           </div>
                         </div>
                       ))}

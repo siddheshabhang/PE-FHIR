@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from '../components/Sidebar.jsx';
 import { doctorService } from '../services/doctorService.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 import { hieService } from '../services/hieService.js';
+import StatusBadge from '../components/StatusBadge.jsx';
 
 const SIDEBAR_ITEMS = [
   { to: '/doctor/dashboard', label: 'Dashboard', icon: '📊', end: true },
@@ -40,6 +41,16 @@ const DoctorDashboard = () => {
 
   const [activePanel, setActivePanel] = useState('submit');
 
+  // TC-05 Fix: Clear transient HIE/FHIR results when switching panels
+  useEffect(() => {
+    setHieFhirResult('');
+    setHieStatus(null);
+    setFhirResult(null);
+    setSubmitResult('');
+    setSubmitError('');
+    setCreatePatientResult(null);
+  }, [activePanel]);
+
   // ── Hospital A: Submit ────────────────────────────────────────
   const [submitForm, setSubmitForm] = useState({
     patientId: '', patientFirstName: '', patientLastName: '',
@@ -65,6 +76,27 @@ const DoctorDashboard = () => {
   const [fhirLoading, setFhirLoading] = useState(false);
   const [fhirResult, setFhirResult] = useState(null);
   const [fhirError, setFhirError] = useState('');
+  const [intakeRecords, setIntakeRecords] = useState([]);
+  const [intakeLoading, setIntakeLoading] = useState(false);
+
+  // TC-06: Fetch Hospital B Intake Records
+  const fetchIntake = async () => {
+    setIntakeLoading(true);
+    try {
+      const data = await doctorService.getHospitalBConsults();
+      setIntakeRecords(data);
+    } catch (e) {
+      console.error('Failed to fetch intake:', e);
+    } finally {
+      setIntakeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activePanel === 'receive') {
+      fetchIntake();
+    }
+  }, [activePanel]);
 
   // ── Create Patient ──────────────────────────────────────────────
   const [createPatientForm, setCreatePatientForm] = useState({
@@ -125,7 +157,9 @@ const DoctorDashboard = () => {
         temperature: parseFloat(submitForm.temperature),
         prescriptionPdfBase64: submitPdf || '',
       });
-      setSubmitResult(msg || 'Record submitted and converted to FHIR successfully.');
+      // TC-02 Fix: msg might be a JSON object (FHIR bundle) returned as string but parsed by Axios
+      const displayMsg = (typeof msg === 'object') ? 'Record submitted and converted to FHIR successfully.' : (msg || 'Record submitted successfully.');
+      setSubmitResult(displayMsg);
       setSubmitForm({ patientId: '', patientFirstName: '', patientLastName: '', doctorName: user?.username || '', visitDate: '', symptoms: '', temperature: '', bloodPressure: '' });
       setSubmitPdf(null);
     } catch (err) {
@@ -170,6 +204,7 @@ const DoctorDashboard = () => {
     try {
       const result = await doctorService.receiveFhirAtHospitalB(fhirInput.trim());
       setFhirResult(result);
+      fetchIntake(); // Refresh the list
     } catch (err) {
       setFhirError(err?.response?.data?.message || err.message || 'Failed to receive FHIR bundle.');
     } finally {
@@ -579,6 +614,33 @@ const DoctorDashboard = () => {
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  <div style={{ marginTop: '24px', borderTop: '1px solid var(--c-divider)', paddingTop: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                      <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: '15px', fontWeight: '700' }}>📥 Inbound Records (Hospital B Intake)</h3>
+                      <button className="btn-outline" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={fetchIntake} disabled={intakeLoading}>
+                        {intakeLoading ? 'Refreshing...' : '🔄 Refresh List'}
+                      </button>
+                    </div>
+
+                    {intakeRecords.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '20px', background: 'var(--c-bg-alt)', borderRadius: 'var(--r-md)', fontSize: '13px', color: 'var(--c-text-muted)' }}>
+                        No records received yet.
+                      </div>
+                    ) : (
+                      <div className="detail-grid" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                        {intakeRecords.map((rec) => (
+                          <div key={rec.id} style={{ padding: '10px', borderBottom: '1px solid var(--c-divider)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: '600', fontSize: '13px' }}>{rec.patientName}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--c-text-muted)' }}>UHID: {rec.uhid} · {rec.consultDate}</div>
+                            </div>
+                            <StatusBadge status={rec.consentVerified ? 'GRANTED' : 'PENDING'} label={rec.consentVerified ? 'Verified' : 'Unverified'} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             )}

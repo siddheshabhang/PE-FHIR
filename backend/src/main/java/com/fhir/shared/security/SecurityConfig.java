@@ -66,6 +66,18 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/hospitalB/**")
                     .hasAnyRole("ADMIN", "DOCTOR")
 
+                // ── Identity endpoints — ADMIN only ────────────────────────
+                .requestMatchers(HttpMethod.POST, "/identity/**")
+                    .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.GET, "/identity/**")
+                    .hasRole("ADMIN")
+
+                // ── HIE Gateway — ADMIN or DOCTOR ──────────────────────────
+                .requestMatchers(HttpMethod.POST, "/hie/exchange")
+                    .hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.GET, "/hie/exchange/**")
+                    .hasAnyRole("ADMIN", "DOCTOR")
+
                 // ── Fallback: any other request must be authenticated ───────
                 // NOTE: Every new endpoint should be listed above explicitly.
                 // This catch-all prevents accidental public exposure.

@@ -47,6 +47,9 @@ public class ConsentRequestEntity {
 
     private Instant updatedAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String consentToken;
+
     @PrePersist
     public void prePersist() {
         Instant now = Instant.now();

@@ -1,0 +1,157 @@
+package com.fhir.hie.service;
+
+import com.fhir.consent.dto.ConsentRequestViewDTO;
+import com.fhir.consent.dto.InitiateConsentDTO;
+import com.fhir.consent.model.ConsentRequestEntity;
+import com.fhir.consent.model.ConsentStatus;
+import com.fhir.consent.repository.ConsentRequestRepository;
+import com.fhir.consent.service.ConsentStore;
+import com.fhir.hie.client.HIPFhirClient;
+import com.fhir.hie.dto.ExchangeRequestDTO;
+import com.fhir.hie.dto.ExchangeResponseDTO;
+import com.fhir.identity.service.IdentityService;
+import com.fhir.notification.NotificationService;
+import com.fhir.shared.audit.AuditService;
+import com.fhir.shared.security.SecurityContextHelper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
+import java.util.Set;
+
+@Service
+public class HIEGatewayService {
+
+    @Autowired private IdentityService identityService;
+    @Autowired private ConsentStore consentStore;
+    @Autowired private ConsentRequestRepository consentRequestRepository;
+    @Autowired private NotificationService notificationService;
+    @Autowired private HIPFhirClient hipFhirClient;
+    @Autowired private AuditService auditService;
+    @Autowired private SecurityContextHelper securityContextHelper;
+
+    public ExchangeResponseDTO orchestrateExchange(ExchangeRequestDTO request) {
+        String requesterId = securityContextHelper.getCurrentUsername();
+
+        // Step 1: Identity resolution
+        if (!identityService.exists(request.getPatientId())) {
+            return ExchangeResponseDTO.builder()
+                .status("IDENTITY_NOT_FOUND")
+                .message("Patient " + request.getPatientId() +
+                         " is not registered in the identity service.")
+                .build();
+        }
+
+        // Step 2: Check for existing active GRANTED consent
+        Set<String> grantedTypes = consentStore.getActiveGrantedDataTypes(
+            request.getPatientId(), requesterId);
+
+        if (!grantedTypes.isEmpty()) {
+            // Consent already granted — pull data immediately
+            return pullAndReturn(request, requesterId, grantedTypes);
+        }
+
+        // Step 3: No consent — create request and notify patient
+        InitiateConsentDTO initiateDTO = new InitiateConsentDTO();
+        initiateDTO.setPatientId(request.getPatientId());
+        initiateDTO.setPurpose(request.getPurpose() != null
+            ? request.getPurpose()
+            : "HIE Data Exchange requested by " + request.getHiu());
+        initiateDTO.setRequestedDataTypes(request.getScope());
+
+        ConsentRequestViewDTO consent = consentStore.initiateRequest(
+            initiateDTO, requesterId);
+
+        // Step 4: Notify patient
+        notificationService.notifyPatientConsentRequest(
+            request.getPatientId(), consent.getId());
+
+        return ExchangeResponseDTO.builder()
+            .status("CONSENT_PENDING")
+            .consentRequestId(consent.getId())
+            .message("Consent request #" + consent.getId() +
+                     " sent to patient. Poll GET /hie/exchange/status/" +
+                     consent.getId() + " until status is SUCCESS.")
+            .build();
+    }
+
+    public ExchangeResponseDTO checkExchangeStatus(Long consentId) {
+        ConsentRequestEntity consent = consentRequestRepository.findById(consentId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND, "Consent request not found: " + consentId));
+
+        if (consent.getStatus() == ConsentStatus.GRANTED) {
+            ExchangeRequestDTO req = new ExchangeRequestDTO();
+            req.setPatientId(consent.getPatientId());
+            req.setHip("HospitalA");
+            req.setHiu("HospitalB");
+            req.setScope(consent.getGrantedDataTypes());
+
+            return pullAndReturn(req, consent.getRequesterId(),
+                consent.getGrantedDataTypes());
+        }
+
+        if (consent.getStatus() == ConsentStatus.DENIED ||
+            consent.getStatus() == ConsentStatus.REVOKED) {
+            return ExchangeResponseDTO.builder()
+                .status(consent.getStatus().name())
+                .message("Patient has " + consent.getStatus().name().toLowerCase() +
+                         " this consent request.")
+                .build();
+        }
+
+        return ExchangeResponseDTO.builder()
+            .status("CONSENT_PENDING")
+            .consentRequestId(consentId)
+            .message("Still waiting for patient approval.")
+            .build();
+    }
+
+    private ExchangeResponseDTO pullAndReturn(
+            ExchangeRequestDTO request,
+            String requesterId,
+            Set<String> grantedTypes) {
+
+        // Fetch the consent token from the latest GRANTED consent
+        List<ConsentRequestEntity> granted = consentRequestRepository
+            .findByPatientIdAndRequesterIdAndStatus(
+                request.getPatientId(), requesterId, ConsentStatus.GRANTED);
+
+        if (granted.isEmpty() || granted.get(0).getConsentToken() == null) {
+            return ExchangeResponseDTO.builder()
+                .status("NO_CONSENT_TOKEN")
+                .message("Consent exists but token not yet generated. Retry.")
+                .build();
+        }
+
+        String consentToken = granted.get(0).getConsentToken();
+
+        Long auditId = auditService.logPending(
+            request.getPatientId(),
+            request.getHip(),
+            request.getHiu(),
+            0,
+            grantedTypes.toString()
+        );
+
+        try {
+            String fhirBundle = hipFhirClient.pullBundle(
+                request.getPatientId(), consentToken, grantedTypes);
+
+            auditService.markSuccess(auditId);
+
+            return ExchangeResponseDTO.builder()
+                .status("SUCCESS")
+                .consentToken(consentToken)
+                .fhirBundle(fhirBundle)
+                .message("Data exchange complete.")
+                .build();
+
+        } catch (Exception e) {
+            auditService.markFailed(auditId, e.getMessage());
+            throw e;
+        }
+    }
+}

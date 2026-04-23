@@ -14,6 +14,7 @@ public class ConsentRequestViewDTO {
     private ConsentStatus status;
     private Set<String> requestedDataTypes;
     private Set<String> grantedDataTypes;
+    private String consentToken;
     private Instant createdAt;
     private Instant updatedAt;
 }

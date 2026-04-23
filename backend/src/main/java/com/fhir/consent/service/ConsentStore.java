@@ -33,6 +33,9 @@ public class ConsentStore {
     @Autowired
     private SecurityContextHelper securityContextHelper;
 
+    @Autowired
+    private ConsentTokenService consentTokenService;
+
     // ── Public API ───────────────────────────────────────────────────────────
 
     @Transactional
@@ -84,6 +87,12 @@ public class ConsentStore {
         }
 
         ConsentRequestEntity saved = requestRepository.save(request);
+
+        if (dto.getDecision() == ConsentStatus.GRANTED) {
+            String token = consentTokenService.generateConsentToken(saved);
+            saved.setConsentToken(token);
+            requestRepository.save(saved);
+        }
 
         ConsentAction action = dto.getDecision() == ConsentStatus.GRANTED ? ConsentAction.GRANTED : ConsentAction.DENIED;
         appendAudit(saved, action);
@@ -164,6 +173,7 @@ public class ConsentStore {
         dto.setStatus(entity.getStatus());
         dto.setRequestedDataTypes(entity.getRequestedDataTypes() != null ? new HashSet<>(entity.getRequestedDataTypes()) : new HashSet<>());
         dto.setGrantedDataTypes(entity.getGrantedDataTypes() != null ? new HashSet<>(entity.getGrantedDataTypes()) : new HashSet<>());
+        dto.setConsentToken(entity.getConsentToken());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

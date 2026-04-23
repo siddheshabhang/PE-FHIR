@@ -6,9 +6,13 @@ import com.fhir.auth.repository.AuthUserRepository;
 import com.fhir.auth.service.AuthService;
 import com.fhir.hospitalA.model.HospitalAOPConsultEntity;
 import com.fhir.hospitalA.repository.HospitalAOPConsultRepository;
+import com.fhir.identity.model.GlobalPatientIdentity;
+import com.fhir.identity.repository.GlobalPatientIdentityRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+
+import java.util.UUID;
 
 @Component
 public class DatabaseSeeder implements CommandLineRunner {
@@ -21,6 +25,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Autowired
     private HospitalAOPConsultRepository consultRepository;
+
+    @Autowired
+    private GlobalPatientIdentityRepository globalPatientIdentityRepository;
 
     @Override
     public void run(String... args) throws Exception {
@@ -60,6 +67,14 @@ public class DatabaseSeeder implements CommandLineRunner {
             consult.setBloodPressure("120/80");
             consult.setPrescriptionPdfBase64(""); // keep empty
             consultRepository.save(consult);
+
+            // Register P-1001 in global identity service
+            GlobalPatientIdentity gpi = new GlobalPatientIdentity();
+            gpi.setGlobalId(UUID.randomUUID().toString());
+            gpi.setHospitalAId("P-1001");
+            gpi.setName("Siddhesh Abhang");
+            globalPatientIdentityRepository.save(gpi);
+            System.out.println("✅ [DatabaseSeeder] Registered P-1001 in global identity registry.");
 
             System.out.println(
                     "✅ [DatabaseSeeder] Successfully seeded mock Admin, Doctor, Patient, and OP Consult data.");

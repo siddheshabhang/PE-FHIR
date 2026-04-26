@@ -129,12 +129,13 @@ export const doctorService = {
   },
 
   /**
-   * GET /doctor/patients/abha/{abhaId}
-   * Fetch patient details by ABHA-ID from the central auth registry
+   * GET /auth/register/patient/{abhaId}
+   * Fetch patient details by ABHA-ID from the central auth registry.
+   * Note: endpoint lives in PatientRegistrationController, not DoctorPatientController.
    */
   getPatientByAbhaId: async (abhaId) => {
     try {
-      const res = await api.get(`/doctor/patients/abha/${abhaId}`);
+      const res = await api.get(`/auth/register/patient/${abhaId}`);
       return res.data;
     } catch (err) {
       throw err;

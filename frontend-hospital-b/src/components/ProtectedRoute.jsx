@@ -10,13 +10,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (allowedRoles && user?.role && !allowedRoles.includes(user.role)) {
-    // Redirect to their own dashboard
-    const roleRoutes = {
-      ADMIN: '/admin/dashboard',
-      DOCTOR: '/doctor/dashboard',
-      PATIENT: '/patient/dashboard',
-    };
-    return <Navigate to={roleRoutes[user.role] || '/login'} replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return children;

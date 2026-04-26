@@ -22,7 +22,13 @@ const LoginPage = () => {
 
   if (isAuthenticated && user) {
     if (user.role === 'DOCTOR') return <Navigate to="/doctor/dashboard" replace />;
-    return <Navigate to="/" replace />; // Shouldn't happen in this portal
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--c-bg)' }}>
+        <h2 style={{ color: 'var(--c-danger)', marginBottom: '16px' }}>Access Denied</h2>
+        <p style={{ marginBottom: '24px' }}>This portal is restricted to Doctors.</p>
+        <button className="btn-primary" onClick={() => { logout(); navigate('/login'); }}>Sign Out</button>
+      </div>
+    );
   }
 
   const validate = () => {

@@ -80,7 +80,7 @@ const DoctorDashboard = () => {
   const handleFhirReceive = async (e) => {
     e.preventDefault();
     if (!fhirInput.trim()) return;
-    setFhirLoading(true); setFhirError(''); setFhirResult(null);
+    setFhirLoading(true); setFhirError('');
     try {
       const result = await doctorService.receiveFhirAtHospitalB(fhirInput.trim());
       setFhirResult(result);

@@ -45,7 +45,7 @@ const HospitalADashboard = () => {
   useEffect(() => {
     setHieFhirResult('');
     setHieStatus(null);
-    setFhirResult(null);
+    setHieStatus(null);
     setSubmitResult('');
     setSubmitError('');
     setCreatePatientResult(null);
@@ -79,6 +79,14 @@ const HospitalADashboard = () => {
   const [hiePolling, setHiePolling] = useState(false);
   const [hieFhirResult, setHieFhirResult] = useState('');
   const [hieError, setHieError] = useState('');
+
+  // ── Add Patient / ABHA Link ───────────────────────────────────
+  const [fhirResult, setFhirResult] = useState(null);
+  const [abhaIdInput, setAbhaIdInput] = useState('');
+  const [patientDetails, setPatientDetails] = useState(null);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [createPatientResult, setCreatePatientResult] = useState(null);
+  const [createPatientError, setCreatePatientError] = useState('');
 
   // ── Handlers ─────────────────────────────────────────────────
   const validateSubmit = () => {

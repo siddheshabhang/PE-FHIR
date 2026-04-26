@@ -43,8 +43,8 @@ export const AuthProvider = ({ children }) => {
     return userObj;
   }, []);
 
-  const register = useCallback(async (username, password, role, patientId, hospitalId, fullName, specialization) => {
-    const data = await authService.register(username, password, role, patientId, hospitalId, fullName, specialization);
+  const register = useCallback(async (username, password, role, patientId, hospitalId, fullName, specialization, email, phone, gender, dateOfBirth, bloodGroup) => {
+    const data = await authService.register(username, password, role, patientId, hospitalId, fullName, specialization, email, phone, gender, dateOfBirth, bloodGroup);
     return data;
   }, []);
 

@@ -19,6 +19,9 @@ public class AuthController {
     @Autowired
     private AuthService authService;
 
+    @Autowired
+    private com.fhir.auth.repository.AuthUserRepository authUserRepository;
+
     // ── POST /auth/register ───────────────────────────────────────────────────
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -42,5 +45,18 @@ public class AuthController {
     public Map<String, String> refresh(@RequestBody RefreshRequest request) {
         String newAccessToken = authService.refresh(request.getRefreshToken());
         return Map.of("accessToken", newAccessToken);
+    }
+
+    // ── GET /auth/doctors ─────────────────────────────────────────────────────
+    @GetMapping("/doctors")
+    public java.util.List<Map<String, String>> getDoctors(@RequestParam String hospitalId) {
+        return authUserRepository.findByRoleAndHospitalId(com.fhir.auth.model.UserRole.DOCTOR, hospitalId)
+                .stream()
+                .map(doc -> Map.of(
+                        "username", doc.getUsername(),
+                        "fullName", doc.getFullName() != null ? doc.getFullName() : doc.getUsername(),
+                        "specialization", doc.getSpecialization() != null ? doc.getSpecialization() : "General"
+                ))
+                .toList();
     }
 }

@@ -24,13 +24,18 @@ export const authService = {
     }
   },
 
-  register: async (username, password, role, patientId, hospitalId, fullName, specialization) => {
+  register: async (username, password, role, patientId, hospitalId, fullName, specialization, email, phone, gender, dateOfBirth, bloodGroup) => {
     try {
       const payload = { username, password, role };
       if (role === 'PATIENT' && patientId) payload.patientId = patientId;
       if (hospitalId) payload.hospitalId = hospitalId;
       if (fullName) payload.fullName = fullName;
       if (specialization) payload.specialization = specialization;
+      if (email) payload.email = email;
+      if (phone) payload.phone = phone;
+      if (gender) payload.gender = gender;
+      if (dateOfBirth) payload.dateOfBirth = dateOfBirth;
+      if (bloodGroup) payload.bloodGroup = bloodGroup;
 
       const res = await api.post('/auth/register', payload);
       return res.data;

@@ -28,7 +28,7 @@ const LoginPage = () => {
   const navigate = useNavigate();
 
   const [isRegister, setIsRegister] = useState(false);
-  const [form, setForm] = useState({ username: '', password: '', role: 'DOCTOR', patientId: '', hospitalId: '', fullName: '', specialization: '' });
+  const [form, setForm] = useState({ username: '', password: '', role: 'DOCTOR', patientId: '', hospitalId: '', fullName: '', specialization: '', email: '', phone: '', gender: '', dateOfBirth: '', bloodGroup: '' });
   const [hospitals, setHospitals] = useState([]);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState('');
@@ -69,7 +69,7 @@ const LoginPage = () => {
     try {
       if (isRegister) {
         const generatedPatientId = form.role === 'PATIENT' ? `P-${Math.floor(1000 + Math.random() * 9000)}` : '';
-        await register(form.username, form.password, form.role, generatedPatientId, form.hospitalId, form.fullName, form.specialization);
+        await register(form.username, form.password, form.role, generatedPatientId, form.hospitalId, form.fullName, form.specialization, form.email, form.phone, form.gender, form.dateOfBirth, form.bloodGroup);
         setSuccessMsg(`Account created successfully.`);
         setIsRegister(false);
         setForm((f) => ({ ...f, password: '' }));
@@ -279,6 +279,48 @@ const LoginPage = () => {
                       placeholder="e.g. Cardiologist"
                       value={form.specialization} onChange={handleChange}
                     />
+                  </div>
+                )}
+                
+                {form.role === 'PATIENT' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '5px' }}>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="form-label" htmlFor="email">Email</label>
+                        <input id="email" name="email" type="email" className="form-input" placeholder="Email address" value={form.email} onChange={handleChange} />
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="form-label" htmlFor="phone">Phone</label>
+                        <input id="phone" name="phone" type="text" className="form-input" placeholder="Phone number" value={form.phone} onChange={handleChange} />
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="form-label" htmlFor="gender">Gender</label>
+                        <select id="gender" name="gender" className="form-input" value={form.gender} onChange={handleChange}>
+                          <option value="">-- Select --</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="form-label" htmlFor="dateOfBirth">Date of Birth</label>
+                        <input id="dateOfBirth" name="dateOfBirth" type="date" className="form-input" value={form.dateOfBirth} onChange={handleChange} />
+                      </div>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="bloodGroup">Blood Group (Optional)</label>
+                      <select id="bloodGroup" name="bloodGroup" className="form-input" value={form.bloodGroup} onChange={handleChange}>
+                        <option value="">-- Select --</option>
+                        <option value="A+">A+</option><option value="A-">A-</option>
+                        <option value="B+">B+</option><option value="B-">B-</option>
+                        <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                        <option value="O+">O+</option><option value="O-">O-</option>
+                      </select>
+                    </div>
                   </div>
                 )}
               </>

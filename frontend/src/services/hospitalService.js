@@ -13,5 +13,14 @@ export const hospitalService = {
         { id: 'HOSP-B', name: 'Metro Medical Center' }
       ];
     }
+  },
+  getDoctors: async (hospitalId) => {
+    try {
+      const res = await api.get(`/auth/doctors?hospitalId=${hospitalId}`);
+      return res.data;
+    } catch (err) {
+      console.error('Failed to load doctors', err);
+      return [];
+    }
   }
 };

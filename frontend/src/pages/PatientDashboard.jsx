@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { patientService } from '../services/patientService.js';
+import { hospitalService } from '../services/hospitalService.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 
 const NAV_TABS = [
+  { id: 'consults', label: 'My Consultations', icon: '🩺' },
   { id: 'consent', label: 'Consent Requests', icon: '🔒' },
   { id: 'transfer', label: 'Push Records', icon: '📤' },
   { id: 'history', label: 'Activity Log', icon: '🕐' },
@@ -36,28 +38,50 @@ const PatientDashboard = () => {
 
   const [consents, setConsents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('consent');
+  const [activeTab, setActiveTab] = useState('consults');
+  const [consults, setConsults] = useState([]);
   const [grantedTypes, setGrantedTypes] = useState({});
   const [consentLoading, setConsentLoading] = useState({});
   const [consentMsg, setConsentMsg] = useState({ id: null, text: '', ok: true });
-  const [pushForm, setPushForm] = useState({ targetRequesterId: '', dataTypes: ['OP_CONSULT'] });
+  const [pushForm, setPushForm] = useState({ targetRequesterId: '', targetHospitalId: '', dataTypes: ['OP_CONSULT'] });
   const [pushLoading, setPushLoading] = useState(false);
   const [pushResult, setPushResult] = useState('');
   const [activityLogs, setActivityLogs] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  
+  const [hospitals, setHospitals] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+
+  useEffect(() => {
+    hospitalService.getHospitals().then(setHospitals);
+  }, []);
+
+  useEffect(() => {
+    if (pushForm.targetHospitalId) {
+      hospitalService.getDoctors(pushForm.targetHospitalId).then(setDoctors);
+    } else {
+      setDoctors([]);
+    }
+  }, [pushForm.targetHospitalId]);
 
   useEffect(() => {
     if (!patientId) { setLoading(false); return; }
-    patientService.getConsents(patientId)
-      .then((data) => {
-        setConsents(data);
+    
+    // Fetch consents and consults
+    Promise.all([
+      patientService.getConsents(patientId),
+      patientService.getConsultations(patientId)
+    ])
+      .then(([consentData, consultData]) => {
+        setConsents(consentData);
+        setConsults(consultData);
         const init = {};
-        data.forEach((c) => {
+        consentData.forEach((c) => {
           init[c.id] = c.grantedDataTypes?.length ? c.grantedDataTypes : ['OP_CONSULT'];
         });
         setGrantedTypes(init);
       })
-      .catch(() => { })
+      .catch((e) => console.error(e))
       .finally(() => setLoading(false));
   }, [patientId]);
 
@@ -109,7 +133,7 @@ const PatientDashboard = () => {
       const msg = await patientService.pushRecords(pushForm.targetRequesterId, pushForm.dataTypes);
       const displayMsg = (typeof msg === 'object') ? (msg.message || 'Records pushed successfully!') : (msg || 'Records pushed successfully!');
       setPushResult(`✅ ${displayMsg}`);
-      setPushForm({ targetRequesterId: '', dataTypes: ['OP_CONSULT'] });
+      setPushForm({ targetRequesterId: '', targetHospitalId: '', dataTypes: ['OP_CONSULT'] });
       fetchActivity();
     } catch (err) {
       setPushResult(`⚠️ ${err?.response?.data?.message || err.message || 'Push failed.'}`);
@@ -186,8 +210,9 @@ const PatientDashboard = () => {
             <h1 className="page-title">Patient Dashboard</h1>
             <p className="page-subtitle">
               {patientId
-                ? `${user?.username} · Patient ID: ${patientId}`
+                ? `${user?.username} · ABHA-ID: `
                 : 'Manage your health data sharing preferences'}
+              {patientId && <span className="patient-id-tag">{patientId}</span>}
             </p>
           </div>
           <div className="topbar-actions">
@@ -227,6 +252,40 @@ const PatientDashboard = () => {
               <div className="alert-error">
                 ⚠️ No Patient ID detected. Please log out and sign in again with your Patient account.
               </div>
+            )}
+
+            {activeTab === 'consults' && (
+              <motion.div className="card" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <div className="card-header">
+                  <div>
+                    <div className="card-title">🩺 My Consultations</div>
+                    <div className="card-subtitle">Your medical visits and clinical notes</div>
+                  </div>
+                </div>
+                <div style={{ padding: '20px 22px' }}>
+                  {consults.length === 0 ? (
+                    <div className="empty-state" style={{ padding: '32px' }}>
+                      <div className="empty-icon">📝</div>
+                      <div className="empty-title">No consultations found</div>
+                      <div className="empty-desc">Your clinical visits will appear here once saved by your doctor.</div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      {consults.map(c => (
+                        <div key={c.id} style={{ border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', padding: '16px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <strong style={{ fontSize: '15px', color: 'var(--c-primary-dark)' }}>{c.hospitalName}</strong>
+                            <span className="timestamp">{new Date(c.visitDate).toLocaleString()}</span>
+                          </div>
+                          <div style={{ fontSize: '14px', marginBottom: '4px' }}><strong>Doctor:</strong> {c.doctorName}</div>
+                          <div style={{ fontSize: '14px', marginBottom: '4px' }}><strong>Diagnosis:</strong> {c.diagnosis}</div>
+                          <div style={{ fontSize: '14px' }}><strong>Medications:</strong> {c.medications.join(', ')}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
             )}
 
             {activeTab === 'consent' && (
@@ -359,14 +418,34 @@ const PatientDashboard = () => {
                   )}
                   <form onSubmit={handlePushSubmit}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Target Requester / Doctor Username</label>
-                        <input
-                          className="form-input"
-                          placeholder="e.g. dr_chen"
-                          value={pushForm.targetRequesterId}
-                          onChange={(e) => setPushForm({ ...pushForm, targetRequesterId: e.target.value })}
-                        />
+                      <div style={{ display: 'flex', gap: '15px' }}>
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label className="form-label">Target Hospital</label>
+                          <select
+                            className="form-input"
+                            value={pushForm.targetHospitalId}
+                            onChange={(e) => setPushForm({ ...pushForm, targetHospitalId: e.target.value, targetRequesterId: '' })}
+                          >
+                            <option value="">-- Select a Hospital --</option>
+                            {hospitals.map(h => (
+                              <option key={h.id} value={h.id}>{h.name} ({h.id})</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label className="form-label">Target Doctor</label>
+                          <select
+                            className="form-input"
+                            disabled={!pushForm.targetHospitalId || doctors.length === 0}
+                            value={pushForm.targetRequesterId}
+                            onChange={(e) => setPushForm({ ...pushForm, targetRequesterId: e.target.value })}
+                          >
+                            <option value="">{pushForm.targetHospitalId ? (doctors.length ? '-- Select Doctor --' : 'No doctors available') : 'Select hospital first'}</option>
+                            {doctors.map(d => (
+                              <option key={d.username} value={d.username}>Dr. {d.fullName} ({d.specialization})</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                       <div className="form-group">
                         <label className="form-label">Data Types to Push</label>

@@ -5,6 +5,8 @@ import org.hl7.fhir.r4.model.*;
 
 import java.text.SimpleDateFormat;
 import java.util.Base64;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class FhirBundleToHospitalBMapper {
     public static HospitalBOPConsultRecordDTO map(Bundle bundle) {
@@ -17,14 +19,11 @@ public class FhirBundleToHospitalBMapper {
 
             // ── Patient ──────────────────────────────────────────────────────
             if (resource instanceof Patient patient) {
-                dto.setAbhaId(patient.getId());
-                dto.setPatientId("B-" + patient.getId());
-                if (!patient.getName().isEmpty()) {
-                    HumanName name = patient.getNameFirstRep();
-                    dto.setPatientName(
-                            name.getGivenAsSingleString() + " " + name.getFamily()
-                    );
-                }
+                String patientIdentifier = extractPatientIdentifier(patient);
+                dto.setAbhaId(extractAbhaId(patient, patientIdentifier));
+                dto.setPatientId(patientIdentifier);
+                dto.setUhid(patientIdentifier);
+                dto.setPatientName(extractPatientName(patient));
             }
 
             // ── Practitioner ─────────────────────────────────────────────────
@@ -75,7 +74,7 @@ public class FhirBundleToHospitalBMapper {
                     }
 
                     // Symptoms
-                    if ("75325-1".equals(code)) {
+                    if ("75325-1".equals(code) || "34109-1".equals(code)) {
                         if (obs.getValue() instanceof StringType s) {
                             dto.setClinicalNotes(s.getValue());
                         }
@@ -117,5 +116,69 @@ public class FhirBundleToHospitalBMapper {
         }
         dto.setVitals(vitals);
         return dto;
+    }
+
+    private static String extractPatientIdentifier(Patient patient) {
+        if (!patient.getIdentifier().isEmpty()) {
+            for (Identifier identifier : patient.getIdentifier()) {
+                if (identifier.hasValue() && identifier.getValue() != null && !identifier.getValue().isBlank()) {
+                    return identifier.getValue();
+                }
+            }
+        }
+
+        if (patient.getIdElement() != null) {
+            String idPart = patient.getIdElement().getIdPart();
+            if (idPart != null && !idPart.isBlank()) {
+                return idPart;
+            }
+        }
+
+        String id = patient.getId();
+        return (id != null && !id.isBlank()) ? id : null;
+    }
+
+    private static String extractAbhaId(Patient patient, String fallbackId) {
+        if (!patient.getIdentifier().isEmpty()) {
+            for (Identifier identifier : patient.getIdentifier()) {
+                String value = identifier.getValue();
+                if (value != null && value.startsWith("ABHA-")) {
+                    return value;
+                }
+            }
+        }
+
+        if (fallbackId != null && fallbackId.startsWith("ABHA-")) {
+            return fallbackId;
+        }
+
+        return fallbackId;
+    }
+
+    private static String extractPatientName(Patient patient) {
+        if (patient.getName().isEmpty()) {
+            return null;
+        }
+
+        HumanName name = patient.getNameFirstRep();
+
+        if (name.hasText() && name.getText() != null && !name.getText().isBlank()) {
+            return name.getText();
+        }
+
+        List<String> parts = name.getGiven().stream()
+                .map(StringType::getValue)
+                .filter(value -> value != null && !value.isBlank())
+                .collect(Collectors.toList());
+
+        if (name.hasFamily() && name.getFamily() != null && !name.getFamily().isBlank()) {
+            parts.add(name.getFamily());
+        }
+
+        if (parts.isEmpty()) {
+            return null;
+        }
+
+        return String.join(" ", parts);
     }
 }

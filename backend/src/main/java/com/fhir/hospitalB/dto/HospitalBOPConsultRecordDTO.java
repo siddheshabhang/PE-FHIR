@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class HospitalBOPConsultRecordDTO {
     private String abhaId;
+    private String uhid;
     private String patientId;
     private String patientName;
     private String consultDate;

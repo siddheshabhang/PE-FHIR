@@ -5,6 +5,7 @@ import ca.uhn.fhir.parser.IParser;
 import com.fhir.consent.service.ConsentStore;
 import com.fhir.hospitalA.dto.HospitalAOPConsultRecordDTO;
 import com.fhir.hospitalA.dto.PatientPushRequestDTO;
+import com.fhir.hospitalA.mapper.FhirBundleToHospitalAMapper;
 import com.fhir.hospitalA.mapper.HospitalAOPConsultToFhirMapper;
 import com.fhir.hospitalA.mapper.HospitalAToFHIRMapper;
 import com.fhir.hospitalA.model.HospitalAOPConsultEntity;
@@ -106,6 +107,14 @@ public class HospitalAService {
     @Transactional(readOnly = true)
     public List<HospitalAOPConsultEntity> getAllConsults() {
         return consultRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @Transactional
+    public HospitalAOPConsultRecordDTO receiveFhirBundle(String fhirJson) {
+        Bundle bundle = fhirContext.newJsonParser().parseResource(Bundle.class, fhirJson);
+        HospitalAOPConsultRecordDTO dto = FhirBundleToHospitalAMapper.map(bundle);
+        persistOPConsult(dto);
+        return dto;
     }
 
     @Transactional(readOnly = true)

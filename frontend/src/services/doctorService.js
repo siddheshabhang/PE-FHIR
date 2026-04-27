@@ -116,6 +116,17 @@ export const doctorService = {
     }
   },
 
+  receiveFhirAtHospitalA: async (fhirJson) => {
+    try {
+      const res = await api.post('/hospitalA/op-consult/receive', fhirJson, {
+        headers: { 'Content-Type': 'text/plain' },
+      });
+      return res.data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
   /**
    * POST /consent/initiate
    * Body: InitiateConsentDTO { patientId, purpose, requestedDataTypes }

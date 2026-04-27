@@ -87,6 +87,10 @@ public class SecurityConfig {
                 // ── HIE Gateway — ADMIN or DOCTOR ──────────────────────────
                 .requestMatchers(HttpMethod.POST, "/hie/exchange")
                     .hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.POST, "/hie/consent-only")
+                    .hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.POST, "/hie/pull-only")
+                    .hasAnyRole("ADMIN", "DOCTOR")
                 .requestMatchers(HttpMethod.GET, "/hie/exchange/**")
                     .hasAnyRole("ADMIN", "DOCTOR")
 

@@ -56,6 +56,21 @@ const PatientDetailsGrid = ({ details }) => (
   </div>
 );
 
+const getApiErrorMessage = (err, fallback) => {
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+  const rawMessage =
+    (typeof data === 'string' && data.trim()) ||
+    data?.message ||
+    data?.error ||
+    err?.message ||
+    fallback;
+
+  return status ? `${rawMessage} (HTTP ${status})` : rawMessage;
+};
+
+const hasPdfAttachment = (record) => !!record?.prescriptionPdfBase64;
+
 // ══════════════════════════════════════════════════════════════
 const HospitalADashboard = () => {
   const { user, logout } = useAuth();
@@ -93,9 +108,13 @@ const HospitalADashboard = () => {
   const [hiePolling, setHiePolling] = useState(false);
   const [hieFhirResult, setHieFhirResult] = useState('');
   const [hieError, setHieError] = useState('');
+  const [copyFeedback, setCopyFeedback] = useState('');
 
   // ── Add Patient / ABHA Link ───────────────────────────────────
+  const [fhirInput, setFhirInput] = useState('');
+  const [fhirLoading, setFhirLoading] = useState(false);
   const [fhirResult, setFhirResult] = useState(null);
+  const [fhirError, setFhirError] = useState('');
   const [abhaIdInput, setAbhaIdInput] = useState('');
   const [patientDetails, setPatientDetails] = useState(null);
   const [linkLoading, setLinkLoading] = useState(false);
@@ -154,6 +173,22 @@ const HospitalADashboard = () => {
     }
   };
 
+  const handleFhirReceive = async (e) => {
+    e.preventDefault();
+    if (!fhirInput.trim()) return;
+    setFhirLoading(true);
+    setFhirError('');
+    setFhirResult(null);
+    try {
+      const result = await doctorService.receiveFhirAtHospitalA(fhirInput.trim());
+      setFhirResult(result);
+    } catch (err) {
+      setFhirError(getApiErrorMessage(err, 'Failed to receive FHIR bundle.'));
+    } finally {
+      setFhirLoading(false);
+    }
+  };
+
   const handleHieSubmit = async (e) => {
     e.preventDefault();
     if (!hieForm.abhaId.trim()) return;
@@ -187,11 +222,8 @@ const HospitalADashboard = () => {
     try {
       const result = await hieService.initiateConsentOnly(hieForm.abhaId, hieForm.scope, hieForm.purpose, HIE_PARTIES);
       setHieStatus(result);
-      if (result.status === 'CONSENT_PENDING') {
-        startPolling(result.consentRequestId);
-      }
     } catch (err) {
-      setHieError(err?.response?.data?.message || 'Consent request failed.');
+      setHieError(getApiErrorMessage(err, 'Consent request failed.'));
     } finally {
       setHieLoading(false);
     }
@@ -210,7 +242,7 @@ const HospitalADashboard = () => {
         setHieError(result.message || 'No active consent found.');
       }
     } catch (err) {
-      setHieError(err?.response?.data?.message || 'Pull failed.');
+      setHieError(getApiErrorMessage(err, 'Pull failed.'));
     } finally {
       setHieLoading(false);
     }
@@ -249,8 +281,22 @@ const HospitalADashboard = () => {
         : [...p.scope, type],
     }));
 
+  const copyBundle = async (bundle) => {
+    if (!bundle) return;
+    try {
+      const text = typeof bundle === 'string' ? bundle : JSON.stringify(bundle, null, 2);
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback('Bundle copied');
+    } catch {
+      setCopyFeedback('Copy failed');
+    } finally {
+      window.setTimeout(() => setCopyFeedback(''), 1800);
+    }
+  };
+
   const PANELS = [
     { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital A → FHIR' },
+    { id: 'receive', label: 'Receive Bundle', icon: '📥', subtitle: 'Hospital A intake' },
     { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
     { id: 'create_patient', label: 'Add Patient', icon: '🧑‍⚕️', subtitle: 'Register a new patient' },
   ];
@@ -391,6 +437,75 @@ const HospitalADashboard = () => {
               </motion.div>
             )}
 
+            {activePanel === 'receive' && (
+              <motion.div
+                key="receive"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar panel-accent-bar--teal" />
+                  <div className="panel-icon panel-icon--teal">📥</div>
+                  <div>
+                    <div className="panel-title">Hospital A — Receive FHIR Bundle</div>
+                    <div className="panel-subtitle">Parse and store an inbound FHIR bundle from another hospital</div>
+                  </div>
+                </div>
+
+                <div className="submit-form">
+                  {fhirError && <div className="alert-error">⚠️ {fhirError}</div>}
+                  <form onSubmit={handleFhirReceive}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                      <div className="form-group">
+                        <label className="form-label">FHIR JSON Bundle</label>
+                        <textarea
+                          className="form-textarea"
+                          rows={9}
+                          placeholder="Paste FHIR JSON bundle here…"
+                          value={fhirInput}
+                          onChange={(e) => setFhirInput(e.target.value)}
+                          style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}
+                        />
+                      </div>
+                      <button type="submit" className="btn-primary" disabled={fhirLoading || !fhirInput.trim()}>
+                        {fhirLoading ? <><span className="btn-spinner" /> Parsing…</> : '📥 Parse FHIR Bundle'}
+                      </button>
+                    </div>
+                  </form>
+
+                  {fhirResult && (
+                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <div className="panel-icon panel-icon--teal" style={{ width: '28px', height: '28px', fontSize: '14px' }}>✅</div>
+                        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: '700', fontSize: '14px', color: 'var(--c-success-text)' }}>Parsed Successfully</span>
+                      </div>
+                      <div className="detail-grid">
+                        {[
+                          ['Patient ID', fhirResult.patientId],
+                          ['ABHA-ID', fhirResult.abhaId],
+                          ['Patient Name', [fhirResult.patientFirstName, fhirResult.patientLastName].filter(Boolean).join(' ')],
+                          ['Visit Date', fhirResult.visitDate],
+                          ['Doctor', fhirResult.doctorName],
+                          ['Clinical Notes', fhirResult.symptoms],
+                          ['Blood Pressure', fhirResult.bloodPressure],
+                          ['Temperature', fhirResult.temperature],
+                          ['Prescription PDF', hasPdfAttachment(fhirResult) ? 'Attached' : 'Not attached'],
+                        ].map(([label, val]) => (
+                          <div key={label} className="detail-row">
+                            <span className="detail-label">{label}</span>
+                            <span className="detail-value">{val || 'N/A'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
             {activePanel === 'hie' && (
               <motion.div
                 key="hie"
@@ -416,8 +531,7 @@ const HospitalADashboard = () => {
 
                   {hieStatus && hieStatus.status === 'CONSENT_PENDING' && (
                     <div className="alert-info">
-                      ⏳ Consent request #{hieStatus.consentRequestId} sent to patient.
-                      {hiePolling ? ' Waiting for approval…' : ' Polling stopped.'}
+                      ⏳ Consent request #{hieStatus.consentRequestId} sent. Ask the patient to approve, then click `Pull Data`.
                     </div>
                   )}
 
@@ -425,7 +539,7 @@ const HospitalADashboard = () => {
                     <div className="alert-error">❌ Patient denied this consent request.</div>
                   )}
 
-                  <form onSubmit={handleHieSubmit}>
+                  <form onSubmit={(e) => e.preventDefault()}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
                       <div className="form-group">
                         <label className="form-label">Patient ABHA-ID</label>
@@ -460,18 +574,19 @@ const HospitalADashboard = () => {
                           ))}
                         </div>
                       </div>
-                      <div className="form-group" style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                      <div className="form-group" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '8px', alignItems: 'stretch' }}>
                         <button
                           type="button"
                           className="btn-primary"
                           style={{ 
-                            flex: 1, 
                             background: 'var(--c-accent)', 
                             borderColor: 'var(--c-accent)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '8px'
+                            gap: '8px',
+                            minHeight: '52px',
+                            width: '100%',
                           }}
                           onClick={handleConsentOnly}
                           disabled={hieLoading || hiePolling}
@@ -483,11 +598,12 @@ const HospitalADashboard = () => {
                           type="button"
                           className="btn-primary"
                           style={{ 
-                            flex: 1,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '8px'
+                            gap: '8px',
+                            minHeight: '52px',
+                            width: '100%',
                           }}
                           onClick={handlePullOnly}
                           disabled={hieLoading || hiePolling}
@@ -496,25 +612,6 @@ const HospitalADashboard = () => {
                         </button>
                       </div>
                       
-                      <div style={{ textAlign: 'center', opacity: 0.4, fontSize: '11px', margin: '8px 0', letterSpacing: '1px' }}>— OR —</div>
-
-                      <button
-                        type="submit"
-                        className="btn-primary"
-                        style={{ 
-                          width: '100%', 
-                          background: 'transparent', 
-                          border: '1px dashed var(--c-primary)', 
-                          color: 'var(--c-primary)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px'
-                        }}
-                        disabled={hieLoading || hiePolling}
-                      >
-                        {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>🔗</span> Auto Orchestrate (1 + 2)</>}
-                      </button>
                     </div>
                   </form>
 
@@ -531,6 +628,10 @@ const HospitalADashboard = () => {
                         }}>
                           ✅ Data received from Hospital B
                         </span>
+                        <button type="button" className="btn-outline" onClick={() => copyBundle(hieFhirResult)}>
+                          Copy Bundle
+                        </button>
+                        {copyFeedback && <span style={{ fontSize: '12px', color: 'var(--c-text-muted)' }}>{copyFeedback}</span>}
                       </div>
                       <div className="fhir-json-section">
                         <span className="fhir-json-label">FHIR Bundle</span>

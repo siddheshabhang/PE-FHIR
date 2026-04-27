@@ -41,6 +41,11 @@ public class HospitalAController {
         return hospitalAService.processOPConsult(consultRecord, requesterId);
     }
 
+    @PostMapping("/op-consult/receive")
+    public HospitalAOPConsultRecordDTO receiveFhirBundle(@RequestBody String fhirJson) {
+        return hospitalAService.receiveFhirBundle(fhirJson);
+    }
+
     @GetMapping("/op-consult")
     public java.util.List<com.fhir.hospitalA.model.HospitalAOPConsultEntity> getAllConsults() {
         return hospitalAService.getAllConsults();

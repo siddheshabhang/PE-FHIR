@@ -10,10 +10,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.TextStyle;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class AdminService {
@@ -39,7 +44,7 @@ public class AdminService {
             Map<String, Object> log = new HashMap<>();
             log.put("id", t.getId());
             log.put("timestamp", t.getTimestamp().toString());
-            log.put("user", t.getTargetHospital()); // The target/requester
+            log.put("user", t.getSourceHospital() + " -> " + t.getTargetHospital());
             log.put("action", "TRANSFER_" + t.getStatus().name());
             log.put("resource", "Patient " + t.getPatientId());
             log.put("status", t.getStatus().name());
@@ -49,34 +54,38 @@ public class AdminService {
     }
 
     public List<Map<String, Object>> getSystemHealth() {
-        // Return simple last 7 days aggregation
-        List<Map<String, Object>> healthList = new ArrayList<>();
-        Calendar cal = Calendar.getInstance();
-        
-        // Let's just return a static list combined with any active failures to keep it simple and robust,
-        // or aggregate properly. For this demo, let's just make up a static baseline and add real DB stats to "Today"
-        long totalTransfers = auditLogRepository.count();
-        long totalFailures = auditLogRepository.findAll().stream().filter(t -> "FAILED".equals(t.getStatus().name())).count();
+        ZoneId zoneId = ZoneId.systemDefault();
+        LocalDate today = LocalDate.now(zoneId);
+        Map<LocalDate, Map<String, Object>> buckets = new LinkedHashMap<>();
 
-        String[] days = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
-        for (String day : days) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("name", day);
-            entry.put("transfers", 5); // baseline mock
-            entry.put("failures", 0);
-            healthList.add(entry);
+        for (int offset = 6; offset >= 0; offset--) {
+            LocalDate day = today.minusDays(offset);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name", day.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.ENGLISH));
+            entry.put("date", day.toString());
+            entry.put("transfers", 0L);
+            entry.put("failures", 0L);
+            buckets.put(day, entry);
         }
-        
-        // Overwrite the last one with real DB stats
-        String today = Instant.now().atZone(ZoneId.systemDefault()).getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.ENGLISH);
-        for (Map<String, Object> entry : healthList) {
-            if (entry.get("name").equals(today)) {
-                entry.put("transfers", totalTransfers);
-                entry.put("failures", totalFailures);
+
+        for (TransferAuditLog log : getAllTransfers()) {
+            if (log.getTimestamp() == null) {
+                continue;
+            }
+
+            LocalDate logDate = log.getTimestamp().atZone(zoneId).toLocalDate();
+            Map<String, Object> bucket = buckets.get(logDate);
+            if (bucket == null) {
+                continue;
+            }
+
+            bucket.put("transfers", ((Long) bucket.get("transfers")) + 1L);
+            if ("FAILED".equals(log.getStatus().name())) {
+                bucket.put("failures", ((Long) bucket.get("failures")) + 1L);
             }
         }
 
-        return healthList;
+        return new ArrayList<>(buckets.values());
     }
 
     public List<AppUser> getAllUsers() {

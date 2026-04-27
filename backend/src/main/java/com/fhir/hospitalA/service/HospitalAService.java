@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -100,6 +101,16 @@ public class HospitalAService {
         Bundle bundle = HospitalAOPConsultToFhirMapper.mapToBundle(consultRecord);
         bundleValidator.validate(bundle);
         return "OP Consult record stored in Hospital A database successfully.";
+    }
+
+    @Transactional(readOnly = true)
+    public List<HospitalAOPConsultEntity> getAllConsults() {
+        return consultRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @Transactional(readOnly = true)
+    public List<HospitalAOPConsultEntity> getConsultsByAbhaId(String abhaId) {
+        return consultRepository.findByAbhaIdOrderByCreatedAtDesc(abhaId);
     }
 
     // ── Patient-Initiated Push ───────────────────────────────────────────────

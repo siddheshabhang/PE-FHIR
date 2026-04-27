@@ -41,6 +41,11 @@ public class HospitalAController {
         return hospitalAService.processOPConsult(consultRecord, requesterId);
     }
 
+    @GetMapping("/op-consult")
+    public java.util.List<com.fhir.hospitalA.model.HospitalAOPConsultEntity> getAllConsults() {
+        return hospitalAService.getAllConsults();
+    }
+
     // ── Patient-Initiated Push Flow ──────────────────────────────────────────
 
     @PostMapping("/op-consult/push")

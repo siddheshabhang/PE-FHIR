@@ -207,7 +207,7 @@ const DoctorDashboard = () => {
       if (result.status === 'CONSENT_PENDING') startPolling(result.consentRequestId);
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
-        try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); } catch (e) {}
+        try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); fetchIntake(); } catch (e) {}
       }
     } catch (err) {
       setHieError(err?.response?.data?.message || err.message || 'Exchange failed.');
@@ -239,7 +239,8 @@ const DoctorDashboard = () => {
       const result = await hieService.pullOnly(hieForm.abhaId, hieForm.scope);
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
-        try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); } catch (e) {}
+        setHieStatus(result);
+        try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); fetchIntake(); } catch (e) {}
       } else {
         setHieError(result.message || 'No active consent found.');
       }
@@ -260,7 +261,7 @@ const DoctorDashboard = () => {
           setHieFhirResult(result.fhirBundle);
           setHiePolling(false);
           clearInterval(interval);
-          try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); } catch (e) {}
+          try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); fetchIntake(); } catch (e) {}
         }
         if (result.status === 'DENIED' || result.status === 'REVOKED') {
           setHiePolling(false);
@@ -448,32 +449,149 @@ const DoctorDashboard = () => {
             )}
 
             {activePanel === 'hie' && (
-              <motion.div key="hie" className="card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+              <motion.div
+                key="hie"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
                 <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
                   <div className="panel-accent-bar panel-accent-bar--teal" />
                   <div className="panel-icon panel-icon--teal">🔗</div>
                   <div>
-                    <div className="panel-title">HIE Gateway</div>
-                    <div className="panel-subtitle">Federated pull</div>
+                    <div className="panel-title">Request Data via HIE Gateway</div>
+                    <div className="panel-subtitle">
+                      Federated pull from Hospital A after patient consent
+                    </div>
                   </div>
                 </div>
                 <div className="submit-form">
                   {hieError && <div className="alert-error">⚠️ {hieError}</div>}
+
+                  {hieStatus && hieStatus.status === 'CONSENT_PENDING' && (
+                    <div className="alert-info">
+                      ⏳ Consent request #{hieStatus.consentRequestId} sent to patient.
+                      {hiePolling ? ' Waiting for approval…' : ' Polling stopped.'}
+                    </div>
+                  )}
+
+                  {hieStatus && hieStatus.status === 'DENIED' && (
+                    <div className="alert-error">❌ Patient denied this consent request.</div>
+                  )}
+
                   <form onSubmit={handleHieSubmit}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
-                      <FieldRow label="Patient ABHA-ID" value={hieForm.abhaId} onChange={e => setHieForm({ ...hieForm, abhaId: e.target.value })} placeholder="e.g. ABHA-1234-5678-9012-34" />
-                      <FieldRow label="Purpose" value={hieForm.purpose} onChange={e => setHieForm({ ...hieForm, purpose: e.target.value })} placeholder="e.g. Follow-up consultation across hospitals" />
-                      <div style={{ display: 'flex', gap: '12px' }}>
-                        <button type="button" className="btn-primary" onClick={handleConsentOnly} disabled={hieLoading}>Request Consent</button>
-                        <button type="button" className="btn-primary" onClick={handlePullOnly} disabled={hieLoading}>Pull Data</button>
+                      <div className="form-group">
+                        <label className="form-label">Patient ABHA-ID</label>
+                        <input className="form-input" placeholder="e.g. ABHA-1234-5678-9012-34" value={hieForm.abhaId} onChange={e => setHieForm({ ...hieForm, abhaId: e.target.value })} />
                       </div>
-                      <button type="submit" className="btn-primary" disabled={hieLoading}>Auto Orchestrate</button>
+                      <div className="form-group">
+                        <label className="form-label">Purpose</label>
+                        <input className="form-input" placeholder="e.g. Second opinion or continuity of care" value={hieForm.purpose} onChange={e => setHieForm({ ...hieForm, purpose: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Data scope requested</label>
+                        <div className="consent-types-row">
+                          {['OP_CONSULT', 'PRESCRIPTION', 'LAB_RESULT'].map(type => (
+                            <label key={type} className="consent-type-check">
+                              <input
+                                type="checkbox"
+                                checked={hieForm.scope.includes(type)}
+                                onChange={() => toggleHieScope(type)}
+                              />
+                              {type.replace(/_/g, ' ')}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{
+                            flex: 1,
+                            background: 'var(--c-accent)',
+                            borderColor: 'var(--c-accent)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                          }}
+                          onClick={handleConsentOnly}
+                          disabled={hieLoading || hiePolling}
+                        >
+                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>🔒</span> 1. Request Consent</>}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                          }}
+                          onClick={handlePullOnly}
+                          disabled={hieLoading || hiePolling}
+                        >
+                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>📥</span> 2. Pull Data</>}
+                        </button>
+                      </div>
+
+                      <div style={{ textAlign: 'center', opacity: 0.4, fontSize: '11px', margin: '8px 0', letterSpacing: '1px' }}>— OR —</div>
+
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        style={{
+                          width: '100%',
+                          background: 'transparent',
+                          border: '1px dashed var(--c-primary)',
+                          color: 'var(--c-primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px'
+                        }}
+                        disabled={hieLoading || hiePolling}
+                      >
+                        {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>🔗</span> Auto Orchestrate (1 + 2)</>}
+                      </button>
                     </div>
                   </form>
+
                   {hieFhirResult && (
-                    <div className="fhir-json-section" style={{ marginTop: '16px' }}>
-                      <pre className="fhir-json">{hieFhirResult}</pre>
-                    </div>
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      style={{ marginTop: '16px' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                        <span style={{
+                          fontFamily: "'Syne', sans-serif", fontWeight: '700',
+                          fontSize: '14px', color: 'var(--c-success-text)'
+                        }}>
+                          ✅ Data received from Hospital A
+                        </span>
+                      </div>
+                      <div className="fhir-json-section">
+                        <span className="fhir-json-label">FHIR Bundle</span>
+                        <pre className="fhir-json">
+                          {(() => {
+                            try {
+                              const parsed = typeof hieFhirResult === 'string' ? JSON.parse(hieFhirResult) : hieFhirResult;
+                              return JSON.stringify(parsed, null, 2);
+                            } catch (e) {
+                              return hieFhirResult;
+                            }
+                          })()}
+                        </pre>
+                      </div>
+                    </motion.div>
                   )}
                 </div>
               </motion.div>

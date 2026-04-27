@@ -122,29 +122,13 @@ export const patientService = {
     }
   },
 
-  /**
-   * Mock endpoint for fetching patient consultations
-   */
-  getConsultations: async (patientId) => {
-    // In a real scenario, this would call GET /patient/consultations/{patientId}
-    // For now, return mock data since the endpoint doesn't exist yet
-    return [
-      {
-        id: 'CON-101',
-        hospitalName: 'City General Hospital',
-        doctorName: 'Dr. Sarah Chen',
-        visitDate: '2026-04-10T09:30:00Z',
-        diagnosis: 'Mild Hypertension',
-        medications: ['Lisinopril 10mg'],
-      },
-      {
-        id: 'CON-102',
-        hospitalName: 'Metro Medical Center',
-        doctorName: 'Dr. Robert Sharma',
-        visitDate: '2026-03-22T14:15:00Z',
-        diagnosis: 'Acute Bronchitis',
-        medications: ['Azithromycin 250mg', 'Albuterol inhaler'],
-      }
-    ];
+  getConsultations: async (abhaId) => {
+    try {
+      const res = await api.get(`/patient/consultations/${abhaId}`);
+      return res.data;
+    } catch {
+      if (MOCK_ENABLED) return [];
+      throw new Error('Failed to fetch consultations');
+    }
   },
 };

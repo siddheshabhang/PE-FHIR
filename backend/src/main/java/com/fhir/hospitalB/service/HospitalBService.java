@@ -14,6 +14,8 @@ import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * Service layer for Hospital B.
  * <p>
@@ -98,6 +100,10 @@ public class HospitalBService {
 
     public java.util.List<HospitalBOPConsultEntity> getAllConsults() {
         return consultRepository.findAll();
+    }
+
+    public List<HospitalBOPConsultEntity> getConsultsByAbhaId(String abhaId) {
+        return consultRepository.findByAbhaIdOrderByReceivedAtDesc(abhaId);
     }
 
     /**

@@ -30,6 +30,14 @@ const TypeCheckbox = ({ type, checked, onChange }) => (
   </label>
 );
 
+const formatConsultTimestamp = (consult) => {
+  const raw = consult.recordedAt || consult.visitDate;
+  if (!raw) return 'Date unavailable';
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? raw : parsed.toLocaleString();
+};
+
 // ══════════════════════════════════════════════════════════════
 const PatientDashboard = () => {
   const { user, logout } = useAuth();
@@ -275,11 +283,21 @@ const PatientDashboard = () => {
                         <div key={c.id} style={{ border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', padding: '16px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                             <strong style={{ fontSize: '15px', color: 'var(--c-primary-dark)' }}>{c.hospitalName}</strong>
-                            <span className="timestamp">{new Date(c.visitDate).toLocaleString()}</span>
+                            <span className="timestamp">{formatConsultTimestamp(c)}</span>
                           </div>
                           <div style={{ fontSize: '14px', marginBottom: '4px' }}><strong>Doctor:</strong> {c.doctorName}</div>
-                          <div style={{ fontSize: '14px', marginBottom: '4px' }}><strong>Diagnosis:</strong> {c.diagnosis}</div>
-                          <div style={{ fontSize: '14px' }}><strong>Medications:</strong> {c.medications.join(', ')}</div>
+                          {c.visitDate && (
+                            <div style={{ fontSize: '14px', marginBottom: '4px' }}><strong>Visit date:</strong> {c.visitDate}</div>
+                          )}
+                          <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                            <strong>Clinical notes:</strong> {c.clinicalNotes || 'No notes recorded'}
+                          </div>
+                          <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                            <strong>Vitals:</strong> BP {c.bloodPressure || 'N/A'} · Temp {c.temperature || 'N/A'}
+                          </div>
+                          <div style={{ fontSize: '14px' }}>
+                            <strong>Prescription:</strong> {c.prescriptionAvailable ? 'Attached' : 'Not attached'}
+                          </div>
                         </div>
                       ))}
                     </div>

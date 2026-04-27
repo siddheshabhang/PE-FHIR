@@ -83,7 +83,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             doctor2.setSpecialization("Neurology");
             authService.register(doctor2);
 
-            // Create Patient P-1001 (HOSP-A)
+            // Create Patient HA-P-1001 (HOSP-A local ID)
             RegisterRequest patient = new RegisterRequest();
             patient.setUsername("rahul_verma");
             patient.setPassword("patientpassword");
@@ -95,7 +95,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 
             // Create an initial consult record for the patient so push flow doesn't 404
             HospitalAOPConsultEntity consult = new HospitalAOPConsultEntity();
-            consult.setPatientId("P-1001");
+            consult.setPatientId("HA-P-1001");
             consult.setAbhaId("ABHA-2233-4455-6677-88");
             consult.setPatientFirstName("Rahul");
             consult.setPatientLastName("Verma");
@@ -107,13 +107,13 @@ public class DatabaseSeeder implements CommandLineRunner {
             consult.setPrescriptionPdfBase64(""); // keep empty
             consultRepository.save(consult);
 
-            // Register P-1001 in global identity service
+            // Register the Hospital A local ID in global identity service
             GlobalPatientIdentity gpi = new GlobalPatientIdentity();
             gpi.setGlobalId(UUID.randomUUID().toString());
-            gpi.setHospitalAId("P-1001");
+            gpi.setHospitalAId("HA-P-1001");
             gpi.setName("Rahul Verma");
             globalPatientIdentityRepository.save(gpi);
-            System.out.println("✅ [DatabaseSeeder] Registered P-1001 in global identity registry.");
+            System.out.println("✅ [DatabaseSeeder] Registered HA-P-1001 in global identity registry.");
 
             System.out.println(
                     "✅ [DatabaseSeeder] Successfully seeded mock Admin, Hospitals, Doctors, Patient, and OP Consult data.");

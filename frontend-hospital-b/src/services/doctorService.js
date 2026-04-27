@@ -37,6 +37,35 @@ export const doctorService = {
   },
 
   /**
+   * POST /hospitalB/op-consult/native
+   * Body: HospitalBOPConsultRecordDTO
+   */
+  submitHospitalBConsult: async (formData) => {
+    try {
+      const payload = {
+        patientId: formData.patientId,
+        abhaId: formData.abhaId || (formData.patientId?.startsWith('ABHA-') ? formData.patientId : ''),
+        patientName: formData.patientName,
+        consultDate: formData.consultDate,
+        doctor: formData.doctor,
+        clinicalNotes: formData.clinicalNotes,
+        vitals: {
+          bp: formData.bloodPressure,
+          temp: formData.temperature,
+        },
+        prescriptionPdfBase64: formData.prescriptionPdfBase64 || '',
+      };
+      const res = await api.post('/hospitalB/op-consult/native', payload);
+      return res.data;
+    } catch (err) {
+      if (MOCK_ENABLED) {
+        return 'OP Consult record stored in Hospital B database successfully (mock)';
+      }
+      throw err;
+    }
+  },
+
+  /**
    * POST /hospitalA/patient/to-fhir
    * Body: HospitalAPatient (raw patient object)
    * Returns FHIR JSON string.
@@ -90,17 +119,17 @@ export const doctorService = {
    * Returns: ConsentRequestViewDTO
    * Requester ID is automatically taken from the logged-in doctor's JWT.
    */
-  initiateConsent: async (patientId, purpose, requestedDataTypes) => {
+  initiateConsent: async (abhaId, purpose, requestedDataTypes) => {
     try {
       const res = await api.post('/consent/initiate', {
-        patientId,
+        patientId: abhaId,
         purpose,
         requestedDataTypes,
       });
       return res.data;
     } catch (err) {
       if (MOCK_ENABLED) {
-        return { id: Date.now(), patientId, purpose, status: 'PENDING', requestedDataTypes };
+        return { id: Date.now(), patientId: abhaId, purpose, status: 'PENDING', requestedDataTypes };
       }
       throw err;
     }
@@ -118,7 +147,7 @@ export const doctorService = {
       if (MOCK_ENABLED) {
         return {
           message: 'Patient created successfully',
-          patientId: 'P-' + Math.floor(Math.random() * 9000 + 1000),
+          patientId: 'HB-P-' + Math.floor(Math.random() * 9000 + 1000),
           username: patientData.firstName.toLowerCase() + '.' + patientData.lastName.toLowerCase(),
           tempPassword: 'password123',
           hospitalId: 'HOSP-A',

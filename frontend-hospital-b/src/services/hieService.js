@@ -13,10 +13,10 @@ export const hieService = {
    *   fhirBundle: string (when SUCCESS)
    *   message: string
    */
-  requestExchange: async (patientId, scope, purpose) => {
+  requestExchange: async (abhaId, scope, purpose) => {
     try {
       const res = await api.post('/hie/exchange', {
-        patientId,
+        patientId: abhaId,
         hip: 'HospitalA',
         hiu: 'HospitalB',
         scope,
@@ -35,9 +35,9 @@ export const hieService = {
     }
   },
 
-  initiateConsentOnly: async (patientId, scope, purpose) => {
+  initiateConsentOnly: async (abhaId, scope, purpose) => {
     const res = await api.post('/hie/consent-only', {
-      patientId,
+      patientId: abhaId,
       hip: 'HospitalA',
       hiu: 'HospitalB',
       scope,
@@ -46,9 +46,9 @@ export const hieService = {
     return res.data;
   },
 
-  pullOnly: async (patientId, scope) => {
+  pullOnly: async (abhaId, scope) => {
     const res = await api.post('/hie/pull-only', {
-      patientId,
+      patientId: abhaId,
       hip: 'HospitalA',
       hiu: 'HospitalB',
       scope,

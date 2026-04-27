@@ -10,6 +10,8 @@ import com.fhir.hie.client.HIPFhirClient;
 import com.fhir.hie.dto.ExchangeRequestDTO;
 import com.fhir.hie.dto.ExchangeResponseDTO;
 import com.fhir.identity.service.IdentityService;
+import com.fhir.hospitalA.repository.HospitalAOPConsultRepository;
+import com.fhir.hospitalB.repository.HospitalBOPConsultRepository;
 import com.fhir.notification.NotificationService;
 import com.fhir.shared.audit.AuditService;
 import com.fhir.shared.security.SecurityContextHelper;
@@ -31,6 +33,8 @@ public class HIEGatewayService {
     @Autowired private HIPFhirClient hipFhirClient;
     @Autowired private AuditService auditService;
     @Autowired private SecurityContextHelper securityContextHelper;
+    @Autowired private HospitalAOPConsultRepository hospitalAOPConsultRepository;
+    @Autowired private HospitalBOPConsultRepository hospitalBOPConsultRepository;
 
     public ExchangeResponseDTO orchestrateExchange(ExchangeRequestDTO request) {
         String requesterId = securityContextHelper.getCurrentUsername();
@@ -90,8 +94,8 @@ public class HIEGatewayService {
         if (consent.getStatus() == ConsentStatus.GRANTED) {
             ExchangeRequestDTO req = new ExchangeRequestDTO();
             req.setPatientId(consent.getPatientId());
-            req.setHip("HospitalA");
-            req.setHiu("HospitalB");
+            req.setHip(resolveHipForPatient(consent.getPatientId(), resolveHipForCurrentRequester()));
+            req.setHiu(resolveHiuForCurrentRequester());
             req.setScope(consent.getGrantedDataTypes());
 
             return pullAndReturn(req, consent.getRequesterId(),
@@ -149,6 +153,8 @@ public class HIEGatewayService {
                 .build();
         }
 
+        request.setHip(resolveHipForPatient(request.getPatientId(), request.getHip()));
+        request.setHiu(resolveHiuForCurrentRequester());
         return pullAndReturn(request, requesterId, grantedTypes);
     }
 
@@ -156,6 +162,11 @@ public class HIEGatewayService {
             ExchangeRequestDTO request,
             String requesterId,
             Set<String> grantedTypes) {
+
+        request.setHip(resolveHipForPatient(request.getPatientId(), request.getHip()));
+        if (request.getHiu() == null || request.getHiu().isBlank()) {
+            request.setHiu(resolveHiuForCurrentRequester());
+        }
 
         // Fetch the consent token from the latest GRANTED consent
         // Fetch the latest GRANTED consent (highest ID)
@@ -208,5 +219,53 @@ public class HIEGatewayService {
             auditService.markFailed(auditId, e.getMessage());
             throw e;
         }
+    }
+
+    private String resolveHipForCurrentRequester() {
+        String hospitalId = securityContextHelper.extractHospitalId();
+        return switch (hospitalId) {
+            case "HOSP-A" -> "HospitalB";
+            case "HOSP-B" -> "HospitalA";
+            default -> "HospitalA";
+        };
+    }
+
+    private String resolveHiuForCurrentRequester() {
+        String hospitalId = securityContextHelper.extractHospitalId();
+        return switch (hospitalId) {
+            case "HOSP-A" -> "HospitalA";
+            case "HOSP-B" -> "HospitalB";
+            default -> "HospitalA";
+        };
+    }
+
+    private String resolveHipForPatient(String abhaId, String preferredHip) {
+        boolean hasHospitalAConsult = hospitalAOPConsultRepository.findFirstByAbhaIdOrderByIdDesc(abhaId).isPresent();
+        boolean hasHospitalBConsult = hospitalBOPConsultRepository.findFirstByAbhaIdOrderByIdDesc(abhaId).isPresent();
+
+        if (preferredHip != null && !preferredHip.isBlank()) {
+            if ("HospitalA".equalsIgnoreCase(preferredHip) && hasHospitalAConsult) {
+                return "HospitalA";
+            }
+            if ("HospitalB".equalsIgnoreCase(preferredHip) && hasHospitalBConsult) {
+                return "HospitalB";
+            }
+        }
+
+        String requesterHospital = resolveHiuForCurrentRequester();
+        if (hasHospitalAConsult && !"HospitalA".equalsIgnoreCase(requesterHospital)) {
+            return "HospitalA";
+        }
+        if (hasHospitalBConsult && !"HospitalB".equalsIgnoreCase(requesterHospital)) {
+            return "HospitalB";
+        }
+        if (hasHospitalAConsult) {
+            return "HospitalA";
+        }
+        if (hasHospitalBConsult) {
+            return "HospitalB";
+        }
+
+        return preferredHip != null && !preferredHip.isBlank() ? preferredHip : resolveHipForCurrentRequester();
     }
 }

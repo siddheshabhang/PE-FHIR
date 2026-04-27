@@ -33,6 +33,11 @@ public class HospitalBController {
         return hospitalBService.receiveFhirBundle(fhirJson);
     }
 
+    @PostMapping("/op-consult/native")
+    public String createNativeConsult(@RequestBody HospitalBOPConsultRecordDTO consultRecord) {
+        return hospitalBService.processNativeConsult(consultRecord);
+    }
+
     @GetMapping("/op-consult")
     public java.util.List<com.fhir.hospitalB.model.HospitalBOPConsultEntity> getAllConsults() {
         return hospitalBService.getAllConsults();

@@ -101,7 +101,7 @@ const HospitalADashboard = () => {
   const [consentError, setConsentError] = useState('');
 
   const [hieForm, setHieForm] = useState({
-    patientId: '', scope: ['OP_CONSULT'], purpose: ''
+    abhaId: '', scope: ['OP_CONSULT'], purpose: ''
   });
   const [hieLoading, setHieLoading] = useState(false);
   const [hieStatus, setHieStatus] = useState(null);
@@ -201,14 +201,14 @@ const HospitalADashboard = () => {
 
   const handleHieSubmit = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId.trim()) return;
+    if (!hieForm.abhaId.trim()) return;
     setHieLoading(true);
     setHieError('');
     setHieStatus(null);
     setHieFhirResult('');
     try {
       const result = await hieService.requestExchange(
-        hieForm.patientId, hieForm.scope, hieForm.purpose
+        hieForm.abhaId, hieForm.scope, hieForm.purpose
       );
       setHieStatus(result);
       if (result.status === 'CONSENT_PENDING') {
@@ -226,11 +226,11 @@ const HospitalADashboard = () => {
 
   const handleConsentOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId) return setHieError('Patient ID required.');
+    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true);
     setHieError(null);
     try {
-      const result = await hieService.initiateConsentOnly(hieForm.patientId, hieForm.scope, hieForm.purpose);
+      const result = await hieService.initiateConsentOnly(hieForm.abhaId, hieForm.scope, hieForm.purpose);
       setHieStatus(result);
       if (result.status === 'CONSENT_PENDING') {
         startPolling(result.consentRequestId);
@@ -244,11 +244,11 @@ const HospitalADashboard = () => {
 
   const handlePullOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId) return setHieError('Patient ID required.');
+    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true);
     setHieError(null);
     try {
-      const result = await hieService.pullOnly(hieForm.patientId, hieForm.scope);
+      const result = await hieService.pullOnly(hieForm.abhaId, hieForm.scope);
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
       } else {
@@ -296,8 +296,6 @@ const HospitalADashboard = () => {
 
   const PANELS = [
     { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital A → FHIR' },
-    { id: 'consent', label: 'Request Consent', icon: '🔒', subtitle: 'Initiate access request' },
-
     { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
     { id: 'create_patient', label: 'Add Patient', icon: '🧑‍⚕️', subtitle: 'Register a new patient' },
   ];
@@ -547,19 +545,19 @@ const HospitalADashboard = () => {
                   <form onSubmit={handleHieSubmit}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
                       <div className="form-group">
-                        <label className="form-label">Patient ID</label>
+                        <label className="form-label">Patient ABHA-ID</label>
                         <input
                           className="form-input"
-                          placeholder="e.g. P-1001"
-                          value={hieForm.patientId}
-                          onChange={e => setHieForm({ ...hieForm, patientId: e.target.value })}
+                          placeholder="e.g. ABHA-1234-5678-9012-34"
+                          value={hieForm.abhaId}
+                          onChange={e => setHieForm({ ...hieForm, abhaId: e.target.value })}
                         />
                       </div>
                       <div className="form-group">
                         <label className="form-label">Purpose</label>
                         <input
                           className="form-input"
-                          placeholder="e.g. Follow-up consultation"
+                          placeholder="e.g. Follow-up consultation across hospitals"
                           value={hieForm.purpose}
                           onChange={e => setHieForm({ ...hieForm, purpose: e.target.value })}
                         />
@@ -695,7 +693,7 @@ const HospitalADashboard = () => {
                       <motion.div className="alert-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                         <div style={{ marginBottom: '8px' }}>✅ <strong>{createPatientResult.message}</strong></div>
                         <div className="detail-grid">
-                          <div className="detail-row"><span className="detail-label">Patient ID:</span> <span className="detail-value">{createPatientResult.patientId || createPatientResult.localPatientId || createPatientResult.abhaId}</span></div>
+                          <div className="detail-row"><span className="detail-label">Patient ID:</span> <span className="detail-value">{createPatientResult.localPatientId || createPatientResult.patientId || createPatientResult.abhaId}</span></div>
                           <div className="detail-row"><span className="detail-label">Username:</span> <span className="detail-value" style={{fontFamily: 'monospace'}}>{createPatientResult.username}</span></div>
                           <div className="detail-row"><span className="detail-label">Password:</span> <span className="detail-value" style={{fontFamily: 'monospace'}}>{createPatientResult.tempPassword}</span></div>
                         </div>

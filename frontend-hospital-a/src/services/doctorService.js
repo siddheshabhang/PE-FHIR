@@ -91,17 +91,17 @@ export const doctorService = {
    * Returns: ConsentRequestViewDTO
    * Requester ID is automatically taken from the logged-in doctor's JWT.
    */
-  initiateConsent: async (patientId, purpose, requestedDataTypes) => {
+  initiateConsent: async (abhaId, purpose, requestedDataTypes) => {
     try {
       const res = await api.post('/consent/initiate', {
-        patientId,
+        patientId: abhaId,
         purpose,
         requestedDataTypes,
       });
       return res.data;
     } catch (err) {
       if (MOCK_ENABLED) {
-        return { id: Date.now(), patientId, purpose, status: 'PENDING', requestedDataTypes };
+        return { id: Date.now(), patientId: abhaId, purpose, status: 'PENDING', requestedDataTypes };
       }
       throw err;
     }
@@ -119,7 +119,7 @@ export const doctorService = {
       if (MOCK_ENABLED) {
         return {
           message: 'Patient created successfully',
-          patientId: 'P-' + Math.floor(Math.random() * 9000 + 1000),
+          patientId: 'HA-P-' + Math.floor(Math.random() * 9000 + 1000),
           username: patientData.firstName.toLowerCase() + '.' + patientData.lastName.toLowerCase(),
           tempPassword: 'password123',
           hospitalId: 'HOSP-A',

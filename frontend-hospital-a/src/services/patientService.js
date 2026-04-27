@@ -9,7 +9,7 @@ const MOCK_ENABLED = false;
 const MOCK_CONSENTS = [
   {
     id: 1,
-    patientId: 'P-1001',
+    patientId: 'ABHA-2233-4455-6677-88',
     requesterId: 'dr_chen',
     purpose: 'Routine checkup and lab review',
     status: 'PENDING',
@@ -20,7 +20,7 @@ const MOCK_CONSENTS = [
   },
   {
     id: 2,
-    patientId: 'P-1001',
+    patientId: 'ABHA-2233-4455-6677-88',
     requesterId: 'dr_sharma',
     purpose: 'Emergency consultation',
     status: 'GRANTED',
@@ -38,9 +38,9 @@ export const patientService = {
    * Returns list of ConsentRequestViewDTO for this patient.
    * Backend enum statuses: PENDING, GRANTED, DENIED, REVOKED
    */
-  getConsents: async (patientId) => {
+  getConsents: async (abhaId) => {
     try {
-      const res = await api.get(`/consent/pending/${patientId}`);
+      const res = await api.get(`/consent/pending/${abhaId}`);
       return res.data;
     } catch {
       if (MOCK_ENABLED) return MOCK_CONSENTS;

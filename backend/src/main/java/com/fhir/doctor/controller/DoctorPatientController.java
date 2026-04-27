@@ -17,10 +17,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @RestController
 @RequestMapping("/doctor/patients")
 public class DoctorPatientController {
+
+    private static final String HOSPITAL_A_PATIENT_PREFIX = "HA-P-";
+    private static final String HOSPITAL_B_PATIENT_PREFIX = "HB-P-";
 
     @Autowired
     private AuthService authService;
@@ -37,7 +41,7 @@ public class DoctorPatientController {
     @PostMapping
     public Map<String, String> createPatient(@RequestBody DoctorPatientRequestDTO request) {
         String doctorHospitalId = securityContextHelper.extractHospitalId();
-        String generatedPatientId = "P-" + (int)(Math.random() * 9000 + 1000);
+        String generatedPatientId = generateLocalPatientId(doctorHospitalId);
         String tempUsername = request.getFirstName().toLowerCase() + "." + request.getLastName().toLowerCase();
         String tempPassword = UUID.randomUUID().toString().substring(0, 8); // simple temp password
 
@@ -96,7 +100,7 @@ public class DoctorPatientController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Patient with ABHA-ID not found");
         }
 
-        String generatedPatientId = "P-" + (int)(Math.random() * 9000 + 1000);
+        String generatedPatientId = generateLocalPatientId(doctorHospitalId);
 
         if ("HOSP-A".equals(doctorHospitalId)) {
             HospitalAPatient clinicalRecord = new HospitalAPatient();
@@ -122,5 +126,15 @@ public class DoctorPatientController {
             "localPatientId", generatedPatientId,
             "hospitalId", doctorHospitalId
         );
+    }
+
+    private String generateLocalPatientId(String hospitalId) {
+        String prefix = switch (hospitalId) {
+            case "HOSP-A" -> HOSPITAL_A_PATIENT_PREFIX;
+            case "HOSP-B" -> HOSPITAL_B_PATIENT_PREFIX;
+            default -> "PX-P-";
+        };
+        int sequence = ThreadLocalRandom.current().nextInt(1000, 10000);
+        return prefix + sequence;
     }
 }

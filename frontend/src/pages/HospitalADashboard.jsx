@@ -11,8 +11,6 @@ const SIDEBAR_ITEMS = [
   { to: '/doctor/dashboard', label: 'Dashboard', icon: '📊', end: true },
 ];
 
-const DATA_TYPES = ['OP_CONSULT', 'PRESCRIPTION', 'LAB_RESULT'];
-
 // ── Small helpers ──────────────────────────────────────────────
 const FieldRow = ({ label, name, type = 'text', placeholder, value, onChange, error, readOnly }) => (
   <div className="form-group">
@@ -27,13 +25,6 @@ const FieldRow = ({ label, name, type = 'text', placeholder, value, onChange, er
   </div>
 );
 
-const TypeCheckbox = ({ type, checked, onChange }) => (
-  <label className="consent-type-check">
-    <input type="checkbox" checked={checked} onChange={onChange} />
-    {type.replace(/_/g, ' ')}
-  </label>
-);
-
 const PATIENT_DETAIL_FIELDS = [
   ['ABHA-ID', 'abhaId'],
   ['Username', 'username'],
@@ -46,6 +37,8 @@ const PATIENT_DETAIL_FIELDS = [
   ['Hospital Base', 'hospitalId'],
   ['Role', 'role'],
 ];
+
+const HIE_PARTIES = { hip: 'HospitalB', hiu: 'HospitalA' };
 
 const patientDetailValue = (details, keys) => {
   const value = keys.map((key) => details?.[key]).find((item) => item !== undefined && item !== null && item !== '');
@@ -92,16 +85,8 @@ const HospitalADashboard = () => {
   const [submitResult, setSubmitResult] = useState('');
   const [submitError, setSubmitError] = useState('');
 
-  // ── Consent Initiation ────────────────────────────────────────
-  const [consentForm, setConsentForm] = useState({
-    patientId: '', purpose: '', requestedDataTypes: ['OP_CONSULT'],
-  });
-  const [consentLoading, setConsentLoading] = useState(false);
-  const [consentResult, setConsentResult] = useState(null);
-  const [consentError, setConsentError] = useState('');
-
   const [hieForm, setHieForm] = useState({
-    patientId: '', scope: ['OP_CONSULT'], purpose: ''
+    abhaId: '', scope: ['OP_CONSULT'], purpose: ''
   });
   const [hieLoading, setHieLoading] = useState(false);
   const [hieStatus, setHieStatus] = useState(null);
@@ -169,46 +154,16 @@ const HospitalADashboard = () => {
     }
   };
 
-  const handleConsentSubmit = async (e) => {
-    e.preventDefault();
-    if (!consentForm.patientId.trim() || !consentForm.purpose.trim()) {
-      setConsentError('Patient ID and Purpose are required.');
-      return;
-    }
-    setConsentLoading(true); setConsentError(''); setConsentResult(null);
-    try {
-      const result = await doctorService.initiateConsent(
-        consentForm.patientId, consentForm.purpose, consentForm.requestedDataTypes,
-      );
-      setConsentResult(result);
-      setConsentForm({ patientId: '', purpose: '', requestedDataTypes: ['OP_CONSULT'] });
-    } catch (err) {
-      setConsentError(err?.response?.data?.message || err.message || 'Failed to initiate consent.');
-    } finally {
-      setConsentLoading(false);
-    }
-  };
-
-  const toggleConsentType = (type) =>
-    setConsentForm((p) => ({
-      ...p,
-      requestedDataTypes: p.requestedDataTypes.includes(type)
-        ? p.requestedDataTypes.filter((t) => t !== type)
-        : [...p.requestedDataTypes, type],
-    }));
-
-
-
   const handleHieSubmit = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId.trim()) return;
+    if (!hieForm.abhaId.trim()) return;
     setHieLoading(true);
     setHieError('');
     setHieStatus(null);
     setHieFhirResult('');
     try {
       const result = await hieService.requestExchange(
-        hieForm.patientId, hieForm.scope, hieForm.purpose
+        hieForm.abhaId, hieForm.scope, hieForm.purpose, HIE_PARTIES
       );
       setHieStatus(result);
       if (result.status === 'CONSENT_PENDING') {
@@ -226,11 +181,11 @@ const HospitalADashboard = () => {
 
   const handleConsentOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId) return setHieError('Patient ID required.');
+    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true);
     setHieError(null);
     try {
-      const result = await hieService.initiateConsentOnly(hieForm.patientId, hieForm.scope, hieForm.purpose);
+      const result = await hieService.initiateConsentOnly(hieForm.abhaId, hieForm.scope, hieForm.purpose, HIE_PARTIES);
       setHieStatus(result);
       if (result.status === 'CONSENT_PENDING') {
         startPolling(result.consentRequestId);
@@ -244,11 +199,11 @@ const HospitalADashboard = () => {
 
   const handlePullOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId) return setHieError('Patient ID required.');
+    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true);
     setHieError(null);
     try {
-      const result = await hieService.pullOnly(hieForm.patientId, hieForm.scope);
+      const result = await hieService.pullOnly(hieForm.abhaId, hieForm.scope, HIE_PARTIES);
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
       } else {
@@ -296,8 +251,6 @@ const HospitalADashboard = () => {
 
   const PANELS = [
     { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital A → FHIR' },
-    { id: 'consent', label: 'Request Consent', icon: '🔒', subtitle: 'Initiate access request' },
-
     { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
     { id: 'create_patient', label: 'Add Patient', icon: '🧑‍⚕️', subtitle: 'Register a new patient' },
   ];
@@ -438,78 +391,6 @@ const HospitalADashboard = () => {
               </motion.div>
             )}
 
-            {/* ── Consent Initiation ─────────────────────────────────── */}
-            {activePanel === 'consent' && (
-              <motion.div
-                key="consent"
-                className="card"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
-                  <div className="panel-accent-bar panel-accent-bar--violet" />
-                  <div className="panel-icon panel-icon--violet">🔒</div>
-                  <div>
-                    <div className="panel-title">Initiate Consent Request</div>
-                    <div className="panel-subtitle">Request patient authorization to access their health records</div>
-                  </div>
-                </div>
-
-                <div className="submit-form">
-                  <AnimatePresence>
-                    {consentResult && (
-                      <motion.div className="alert-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        ✅ Consent request sent — Status: <strong>{consentResult.status}</strong> · ID: #{consentResult.id}
-                      </motion.div>
-                    )}
-                    {consentError && (
-                      <motion.div className="alert-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        ⚠️ {consentError}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  <form onSubmit={handleConsentSubmit}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Patient ID</label>
-                        <input className="form-input" placeholder="e.g. P-1001"
-                          value={consentForm.patientId}
-                          onChange={(e) => setConsentForm({ ...consentForm, patientId: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Purpose of Request</label>
-                        <input className="form-input" placeholder="e.g. Follow-up consultation, Emergency review"
-                          value={consentForm.purpose}
-                          onChange={(e) => setConsentForm({ ...consentForm, purpose: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Requested Data Types</label>
-                        <div className="consent-types-row">
-                          {DATA_TYPES.map((type) => (
-                            <TypeCheckbox
-                              key={type} type={type}
-                              checked={consentForm.requestedDataTypes.includes(type)}
-                              onChange={() => toggleConsentType(type)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <button type="submit" className="btn-primary" disabled={consentLoading}>
-                        {consentLoading ? '⏳ Sending request…' : '📨 Send Consent Request'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </motion.div>
-            )}
-
-
-
             {activePanel === 'hie' && (
               <motion.div
                 key="hie"
@@ -547,19 +428,19 @@ const HospitalADashboard = () => {
                   <form onSubmit={handleHieSubmit}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
                       <div className="form-group">
-                        <label className="form-label">Patient ID</label>
+                        <label className="form-label">Patient ABHA-ID</label>
                         <input
                           className="form-input"
-                          placeholder="e.g. P-1001"
-                          value={hieForm.patientId}
-                          onChange={e => setHieForm({ ...hieForm, patientId: e.target.value })}
+                          placeholder="e.g. ABHA-1234-5678-9012-34"
+                          value={hieForm.abhaId}
+                          onChange={e => setHieForm({ ...hieForm, abhaId: e.target.value })}
                         />
                       </div>
                       <div className="form-group">
                         <label className="form-label">Purpose</label>
                         <input
                           className="form-input"
-                          placeholder="e.g. Follow-up consultation"
+                          placeholder="e.g. Follow-up consultation across hospitals"
                           value={hieForm.purpose}
                           onChange={e => setHieForm({ ...hieForm, purpose: e.target.value })}
                         />

@@ -8,6 +8,7 @@ import com.fhir.hospitalB.mapper.FhirBundleToHospitalBMapper;
 import com.fhir.hospitalB.model.HospitalBPatient;
 import com.fhir.hospitalB.model.HospitalBOPConsultEntity;
 import com.fhir.hospitalB.repository.HospitalBOPConsultRepository;
+import com.fhir.hospitalB.repository.HospitalBPatientRepository;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,9 @@ public class HospitalBService {
 
     @Autowired
     private HospitalBOPConsultRepository consultRepository;
+
+    @Autowired
+    private HospitalBPatientRepository patientRepository;
 
     /**
      * Parses a FHIR Patient JSON string and maps it to the Hospital B domain
@@ -72,6 +76,26 @@ public class HospitalBService {
         return dto;
     }
 
+    public String processNativeConsult(HospitalBOPConsultRecordDTO dto) {
+        resolvePatientIdentity(dto);
+
+        HospitalBOPConsultEntity entity = new HospitalBOPConsultEntity();
+        entity.setAbhaId(dto.getAbhaId());
+        entity.setPatientId(dto.getPatientId());
+        entity.setPatientName(dto.getPatientName());
+        entity.setConsultDate(dto.getConsultDate());
+        entity.setDoctor(dto.getDoctor());
+        entity.setClinicalNotes(dto.getClinicalNotes());
+        entity.setConsentVerified(true);
+        if (dto.getVitals() != null) {
+            entity.setBloodPressure(dto.getVitals().getBp());
+            entity.setTemperature(dto.getVitals().getTemp());
+        }
+        entity.setPrescriptionPdfBase64(dto.getPrescriptionPdfBase64());
+        consultRepository.save(entity);
+        return "OP Consult record stored in Hospital B database successfully.";
+    }
+
     public java.util.List<HospitalBOPConsultEntity> getAllConsults() {
         return consultRepository.findAll();
     }
@@ -106,5 +130,22 @@ public class HospitalBService {
         return fhirContext.newJsonParser()
             .setPrettyPrint(true)
             .encodeResourceToString(bundle);
+    }
+
+    private void resolvePatientIdentity(HospitalBOPConsultRecordDTO dto) {
+        if (isBlank(dto.getAbhaId()) && !isBlank(dto.getPatientId()) && dto.getPatientId().startsWith("ABHA-")) {
+            dto.setAbhaId(dto.getPatientId());
+        }
+
+        if (isBlank(dto.getAbhaId()) && !isBlank(dto.getPatientId())) {
+            patientRepository.findByPatientId(dto.getPatientId())
+                .map(HospitalBPatient::getAbhaId)
+                .filter(abhaId -> !isBlank(abhaId))
+                .ifPresent(dto::setAbhaId);
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

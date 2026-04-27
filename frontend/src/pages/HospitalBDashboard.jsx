@@ -53,18 +53,37 @@ const PatientDetailsGrid = ({ details }) => (
   </div>
 );
 
+const HIE_PARTIES = { hip: 'HospitalA', hiu: 'HospitalB' };
+
 const HospitalBDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [activePanel, setActivePanel] = useState('receive');
+  const [activePanel, setActivePanel] = useState('submit');
 
   useEffect(() => {
     setHieFhirResult('');
     setHieStatus(null);
     setFhirResult(null);
     setCreatePatientResult(null);
+    setSubmitResult('');
+    setSubmitError('');
   }, [activePanel]);
+
+  const [submitForm, setSubmitForm] = useState({
+    patientId: '',
+    patientName: '',
+    consultDate: '',
+    doctor: user?.username || '',
+    clinicalNotes: '',
+    temperature: '',
+    bloodPressure: '',
+  });
+  const [submitPdf, setSubmitPdf] = useState(null);
+  const [submitErrors, setSubmitErrors] = useState({});
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitResult, setSubmitResult] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   const [fhirInput, setFhirInput] = useState('');
   const [fhirLoading, setFhirLoading] = useState(false);
@@ -98,13 +117,72 @@ const HospitalBDashboard = () => {
   const [createPatientError, setCreatePatientError] = useState('');
 
   const [hieForm, setHieForm] = useState({
-    patientId: '', scope: ['OP_CONSULT'], purpose: ''
+    abhaId: '', scope: ['OP_CONSULT'], purpose: ''
   });
   const [hieLoading, setHieLoading] = useState(false);
   const [hieStatus, setHieStatus] = useState(null);
   const [hiePolling, setHiePolling] = useState(false);
   const [hieFhirResult, setHieFhirResult] = useState('');
   const [hieError, setHieError] = useState('');
+
+  const validateSubmit = () => {
+    const errors = {};
+    if (!submitForm.patientId.trim()) errors.patientId = 'Required';
+    if (!submitForm.patientName.trim()) errors.patientName = 'Required';
+    if (!submitForm.consultDate) errors.consultDate = 'Required';
+    if (!submitForm.clinicalNotes.trim()) errors.clinicalNotes = 'Required';
+    if (!submitForm.temperature.trim()) errors.temperature = 'Required';
+    if (!submitForm.bloodPressure.trim()) errors.bloodPressure = 'Required';
+    return errors;
+  };
+
+  const handleSubmitChange = (e) => {
+    const { name, value } = e.target;
+    setSubmitForm((prev) => ({ ...prev, [name]: value }));
+    setSubmitErrors((prev) => ({ ...prev, [name]: '' }));
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setSubmitPdf(reader.result.split(',')[1]);
+    reader.readAsDataURL(file);
+  };
+
+  const handleNativeSubmit = async (e) => {
+    e.preventDefault();
+    const errors = validateSubmit();
+    if (Object.keys(errors).length) {
+      setSubmitErrors(errors);
+      return;
+    }
+    setSubmitLoading(true);
+    setSubmitError('');
+    setSubmitResult('');
+    try {
+      const message = await doctorService.submitHospitalBConsult({
+        ...submitForm,
+        prescriptionPdfBase64: submitPdf || '',
+      });
+      setSubmitResult(message || 'Consult stored successfully.');
+      setSubmitForm({
+        patientId: '',
+        patientName: '',
+        consultDate: '',
+        doctor: user?.username || '',
+        clinicalNotes: '',
+        temperature: '',
+        bloodPressure: '',
+      });
+      setSubmitPdf(null);
+      fetchIntake();
+    } catch (err) {
+      setSubmitError(err?.response?.data?.message || err.message || 'Failed to store consult.');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
 
   const handleFhirReceive = async (e) => {
     e.preventDefault();
@@ -123,10 +201,10 @@ const HospitalBDashboard = () => {
 
   const handleHieSubmit = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId.trim()) return;
+    if (!hieForm.abhaId.trim()) return;
     setHieLoading(true); setHieError(''); setHieStatus(null); setHieFhirResult('');
     try {
-      const result = await hieService.requestExchange(hieForm.patientId, hieForm.scope, hieForm.purpose);
+      const result = await hieService.requestExchange(hieForm.abhaId, hieForm.scope, hieForm.purpose, HIE_PARTIES);
       setHieStatus(result);
       if (result.status === 'CONSENT_PENDING') startPolling(result.consentRequestId);
       if (result.status === 'SUCCESS') {
@@ -142,10 +220,10 @@ const HospitalBDashboard = () => {
 
   const handleConsentOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId) return setHieError('Patient ID required.');
+    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true); setHieError(null);
     try {
-      const result = await hieService.initiateConsentOnly(hieForm.patientId, hieForm.scope, hieForm.purpose);
+      const result = await hieService.initiateConsentOnly(hieForm.abhaId, hieForm.scope, hieForm.purpose, HIE_PARTIES);
       setHieStatus(result);
       if (result.status === 'CONSENT_PENDING') startPolling(result.consentRequestId);
     } catch (err) {
@@ -157,10 +235,10 @@ const HospitalBDashboard = () => {
 
   const handlePullOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.patientId) return setHieError('Patient ID required.');
+    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true); setHieError(null);
     try {
-      const result = await hieService.pullOnly(hieForm.patientId, hieForm.scope);
+      const result = await hieService.pullOnly(hieForm.abhaId, hieForm.scope, HIE_PARTIES);
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
         try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); } catch (e) {}
@@ -205,6 +283,7 @@ const HospitalBDashboard = () => {
     }));
 
   const PANELS = [
+    { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital B native record' },
     { id: 'receive', label: 'Receive Bundle', icon: '📥', subtitle: 'Hospital B intake' },
     { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
     { id: 'create_patient', label: 'Add Patient', icon: '🧑‍⚕️', subtitle: 'Register a new patient' },
@@ -255,6 +334,57 @@ const HospitalBDashboard = () => {
           </div>
 
           <AnimatePresence mode="wait">
+            {activePanel === 'submit' && (
+              <motion.div key="submit" className="card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar panel-accent-bar--green" />
+                  <div className="panel-icon panel-icon--green">📝</div>
+                  <div>
+                    <div className="panel-title">Hospital B — Submit OP Consult</div>
+                    <div className="panel-subtitle">Create a local consult record that HIE can serve by ABHA-ID</div>
+                  </div>
+                </div>
+                <div className="submit-form">
+                  {submitResult && <div className="alert-success">✅ {submitResult}</div>}
+                  {submitError && <div className="alert-error">⚠️ {submitError}</div>}
+                  <form onSubmit={handleNativeSubmit}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                      <div className="form-row">
+                        <FieldRow label="Patient ID / ABHA-ID" name="patientId" value={submitForm.patientId} onChange={handleSubmitChange} placeholder="e.g. HB-P-1234 or ABHA-1234-5678-9012-34" error={submitErrors.patientId} />
+                        <FieldRow label="Consult Date" name="consultDate" type="date" value={submitForm.consultDate} onChange={handleSubmitChange} error={submitErrors.consultDate} />
+                      </div>
+                      <div className="form-row">
+                        <FieldRow label="Patient Name" name="patientName" value={submitForm.patientName} onChange={handleSubmitChange} placeholder="Full patient name" error={submitErrors.patientName} />
+                        <FieldRow label="Doctor" name="doctor" value={submitForm.doctor} onChange={handleSubmitChange} placeholder="Doctor name" />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Clinical Notes</label>
+                        <textarea name="clinicalNotes" className={`form-textarea ${submitErrors.clinicalNotes ? 'input-error' : ''}`} rows={4} value={submitForm.clinicalNotes} onChange={handleSubmitChange} placeholder="Consult summary, diagnosis, and treatment notes" />
+                        {submitErrors.clinicalNotes && <span className="field-error">{submitErrors.clinicalNotes}</span>}
+                      </div>
+                      <div className="form-row">
+                        <FieldRow label="Temperature" name="temperature" value={submitForm.temperature} onChange={handleSubmitChange} placeholder="e.g. 98.6" error={submitErrors.temperature} />
+                        <FieldRow label="Blood Pressure" name="bloodPressure" value={submitForm.bloodPressure} onChange={handleSubmitChange} placeholder="e.g. 120/80" error={submitErrors.bloodPressure} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Prescription PDF (Optional)</label>
+                        <div className="file-upload-area">
+                          <input type="file" id="hospital-b-pdf-upload" accept=".pdf" className="file-input" onChange={handleFileChange} />
+                          <label htmlFor="hospital-b-pdf-upload" className="file-label">
+                            <span className="file-icon">📎</span>
+                            <span>{submitPdf ? '✅ PDF attached — ready to store' : 'Click to upload PDF prescription'}</span>
+                          </label>
+                        </div>
+                      </div>
+                      <button type="submit" className="btn-primary" disabled={submitLoading}>
+                        {submitLoading ? <><span className="btn-spinner" /> Saving…</> : '💾 Save Hospital B Consult'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            )}
+
             {activePanel === 'receive' && (
               <motion.div key="receive" className="card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
                 <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
@@ -333,8 +463,8 @@ const HospitalBDashboard = () => {
                   {hieError && <div className="alert-error">⚠️ {hieError}</div>}
                   <form onSubmit={handleHieSubmit}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
-                      <FieldRow label="Patient ID" value={hieForm.patientId} onChange={e => setHieForm({ ...hieForm, patientId: e.target.value })} />
-                      <FieldRow label="Purpose" value={hieForm.purpose} onChange={e => setHieForm({ ...hieForm, purpose: e.target.value })} />
+                      <FieldRow label="Patient ABHA-ID" value={hieForm.abhaId} onChange={e => setHieForm({ ...hieForm, abhaId: e.target.value })} placeholder="e.g. ABHA-1234-5678-9012-34" />
+                      <FieldRow label="Purpose" value={hieForm.purpose} onChange={e => setHieForm({ ...hieForm, purpose: e.target.value })} placeholder="e.g. Follow-up consultation across hospitals" />
                       <div style={{ display: 'flex', gap: '12px' }}>
                         <button type="button" className="btn-primary" onClick={handleConsentOnly} disabled={hieLoading}>Request Consent</button>
                         <button type="button" className="btn-primary" onClick={handlePullOnly} disabled={hieLoading}>Pull Data</button>
@@ -358,7 +488,7 @@ const HospitalBDashboard = () => {
                 </div>
                 <div className="submit-form">
                   {createPatientError && <div className="alert-error">{createPatientError}</div>}
-                  {createPatientResult && <div className="alert-success">Linked: {createPatientResult.patientId}</div>}
+                  {createPatientResult && <div className="alert-success">Linked: {createPatientResult.localPatientId || createPatientResult.patientId}</div>}
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     setLinkLoading(true);

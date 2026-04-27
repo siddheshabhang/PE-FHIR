@@ -68,9 +68,12 @@ const LoginPage = () => {
     setApiError('');
     try {
       if (isRegister) {
-        const generatedPatientId = form.role === 'PATIENT' ? `P-${Math.floor(1000 + Math.random() * 9000)}` : '';
-        await register(form.username, form.password, form.role, generatedPatientId, form.hospitalId, form.fullName, form.specialization, form.email, form.phone, form.gender, form.dateOfBirth, form.bloodGroup);
-        setSuccessMsg(`Account created successfully.`);
+        const result = await register(form.username, form.password, form.role, '', form.hospitalId, form.fullName, form.specialization, form.email, form.phone, form.gender, form.dateOfBirth, form.bloodGroup);
+        setSuccessMsg(
+          form.role === 'PATIENT' && result?.abhaId
+            ? `Patient registered successfully. ABHA-ID: ${result.abhaId}`
+            : 'Account created successfully.'
+        );
         setIsRegister(false);
         setForm((f) => ({ ...f, password: '' }));
       } else {

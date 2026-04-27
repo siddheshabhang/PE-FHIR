@@ -24,6 +24,35 @@ const FieldRow = ({ label, name, type = 'text', placeholder, value, onChange, er
   </div>
 );
 
+const PATIENT_DETAIL_FIELDS = [
+  ['ABHA-ID', 'abhaId'],
+  ['Username', 'username'],
+  ['Name', 'fullName', 'name'],
+  ['Email', 'email'],
+  ['Phone', 'phone'],
+  ['Date of Birth', 'dateOfBirth', 'dob'],
+  ['Gender', 'gender'],
+  ['Blood Group', 'bloodGroup'],
+  ['Hospital Base', 'hospitalId'],
+  ['Role', 'role'],
+];
+
+const patientDetailValue = (details, keys) => {
+  const value = keys.map((key) => details?.[key]).find((item) => item !== undefined && item !== null && item !== '');
+  return value || 'Not provided';
+};
+
+const PatientDetailsGrid = ({ details }) => (
+  <div className="detail-grid">
+    {PATIENT_DETAIL_FIELDS.map(([label, ...keys]) => (
+      <div className="detail-row" key={label}>
+        <span className="detail-label">{label}:</span>
+        <span className="detail-value">{patientDetailValue(details, keys)}</span>
+      </div>
+    ))}
+  </div>
+);
+
 const HospitalBDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -342,7 +371,8 @@ const HospitalBDashboard = () => {
                   </form>
                   {patientDetails && (
                     <div style={{ marginTop: '16px' }}>
-                      <p>{patientDetails.name || patientDetails.fullName}</p>
+                      <h4 style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Patient Details Found:</h4>
+                      <PatientDetailsGrid details={patientDetails} />
                       <button className="btn-primary" onClick={async () => {
                         setLinkLoading(true);
                         try { const res = await doctorService.linkPatientByAbhaId(abhaIdInput); setCreatePatientResult(res); setPatientDetails(null); }

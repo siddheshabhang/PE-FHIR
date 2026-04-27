@@ -27,7 +27,6 @@ export const authService = {
   register: async (username, password, role, patientId, hospitalId, fullName, specialization, email, phone, gender, dateOfBirth, bloodGroup) => {
     try {
       const payload = { username, password, role };
-      if (role === 'PATIENT' && patientId) payload.patientId = patientId;
       if (hospitalId) payload.hospitalId = hospitalId;
       if (fullName) payload.fullName = fullName;
       if (specialization) payload.specialization = specialization;
@@ -37,7 +36,8 @@ export const authService = {
       if (dateOfBirth) payload.dateOfBirth = dateOfBirth;
       if (bloodGroup) payload.bloodGroup = bloodGroup;
 
-      const res = await api.post('/auth/register', payload);
+      const registerUrl = role === 'PATIENT' ? '/auth/register/patient' : '/auth/register';
+      const res = await api.post(registerUrl, payload);
       return res.data;
     } catch (err) {
       if (MOCK_ENABLED) {

@@ -17,6 +17,7 @@ export const doctorService = {
       // Only send fields that exist in HospitalAOPConsultRecordDTO
       const payload = {
         patientId:            formData.patientId,
+        abhaId:               formData.abhaId || (formData.patientId?.startsWith('ABHA-') ? formData.patientId : ''),
         patientFirstName:     formData.patientFirstName,
         patientLastName:      formData.patientLastName,
         doctorName:           formData.doctorName,

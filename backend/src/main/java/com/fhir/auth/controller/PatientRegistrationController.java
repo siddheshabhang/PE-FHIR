@@ -7,8 +7,8 @@ import com.fhir.auth.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 import com.fhir.auth.repository.AuthUserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -54,14 +54,17 @@ public class PatientRegistrationController {
         AppUser user = authUserRepository.findByAbhaId(abhaId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Patient not found"));
 
-        return Map.of(
-            "abhaId", user.getAbhaId(),
-            "fullName", user.getFullName(),
-            "email", user.getEmail() != null ? user.getEmail() : "",
-            "phone", user.getPhone() != null ? user.getPhone() : "",
-            "gender", user.getGender() != null ? user.getGender() : "",
-            "dateOfBirth", user.getDateOfBirth() != null ? user.getDateOfBirth() : "",
-            "bloodGroup", user.getBloodGroup() != null ? user.getBloodGroup() : ""
-        );
+        Map<String, Object> patient = new LinkedHashMap<>();
+        patient.put("abhaId", user.getAbhaId());
+        patient.put("username", user.getUsername());
+        patient.put("fullName", user.getFullName());
+        patient.put("email", user.getEmail());
+        patient.put("phone", user.getPhone());
+        patient.put("gender", user.getGender());
+        patient.put("dateOfBirth", user.getDateOfBirth());
+        patient.put("bloodGroup", user.getBloodGroup());
+        patient.put("hospitalId", user.getHospitalId());
+        patient.put("role", user.getRole());
+        return patient;
     }
 }

@@ -34,6 +34,35 @@ const TypeCheckbox = ({ type, checked, onChange }) => (
   </label>
 );
 
+const PATIENT_DETAIL_FIELDS = [
+  ['ABHA-ID', 'abhaId'],
+  ['Username', 'username'],
+  ['Name', 'fullName', 'name'],
+  ['Email', 'email'],
+  ['Phone', 'phone'],
+  ['Date of Birth', 'dateOfBirth', 'dob'],
+  ['Gender', 'gender'],
+  ['Blood Group', 'bloodGroup'],
+  ['Hospital Base', 'hospitalId'],
+  ['Role', 'role'],
+];
+
+const patientDetailValue = (details, keys) => {
+  const value = keys.map((key) => details?.[key]).find((item) => item !== undefined && item !== null && item !== '');
+  return value || 'Not provided';
+};
+
+const PatientDetailsGrid = ({ details }) => (
+  <div className="detail-grid">
+    {PATIENT_DETAIL_FIELDS.map(([label, ...keys]) => (
+      <div className="detail-row" key={label}>
+        <span className="detail-label">{label}:</span>
+        <span className="detail-value">{patientDetailValue(details, keys)}</span>
+      </div>
+    ))}
+  </div>
+);
+
 // ══════════════════════════════════════════════════════════════
 const HospitalADashboard = () => {
   const { user, logout } = useAuth();
@@ -364,7 +393,7 @@ const HospitalADashboard = () => {
                   <form onSubmit={handleSubmit} noValidate>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
                       <div className="form-row">
-                        <FieldRow label="Patient ID" name="patientId" placeholder="e.g. P-1001" value={submitForm.patientId} onChange={handleSubmitChange} error={submitErrors.patientId} />
+                        <FieldRow label="Patient ID / ABHA-ID" name="patientId" placeholder="e.g. P-1001 or ABHA-1234-5678-9012-34" value={submitForm.patientId} onChange={handleSubmitChange} error={submitErrors.patientId} />
                         <FieldRow label="Visit Date" name="visitDate" type="date" value={submitForm.visitDate} onChange={handleSubmitChange} error={submitErrors.visitDate} />
                       </div>
                       <div className="form-row">
@@ -666,7 +695,7 @@ const HospitalADashboard = () => {
                       <motion.div className="alert-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                         <div style={{ marginBottom: '8px' }}>✅ <strong>{createPatientResult.message}</strong></div>
                         <div className="detail-grid">
-                          <div className="detail-row"><span className="detail-label">Patient ID:</span> <span className="detail-value">{createPatientResult.patientId}</span></div>
+                          <div className="detail-row"><span className="detail-label">Patient ID:</span> <span className="detail-value">{createPatientResult.patientId || createPatientResult.localPatientId || createPatientResult.abhaId}</span></div>
                           <div className="detail-row"><span className="detail-label">Username:</span> <span className="detail-value" style={{fontFamily: 'monospace'}}>{createPatientResult.username}</span></div>
                           <div className="detail-row"><span className="detail-label">Password:</span> <span className="detail-value" style={{fontFamily: 'monospace'}}>{createPatientResult.tempPassword}</span></div>
                         </div>
@@ -715,11 +744,7 @@ const HospitalADashboard = () => {
                         style={{ marginTop: '16px', background: 'var(--c-bg-alt)', padding: '16px', borderRadius: 'var(--r-md)' }}
                       >
                         <h4 style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Patient Details Found:</h4>
-                        <div className="detail-grid">
-                          <div className="detail-row"><span className="detail-label">Name:</span> <span className="detail-value">{patientDetails.name || patientDetails.fullName}</span></div>
-                          <div className="detail-row"><span className="detail-label">DOB:</span> <span className="detail-value">{patientDetails.dateOfBirth || patientDetails.dob}</span></div>
-                          <div className="detail-row"><span className="detail-label">Gender:</span> <span className="detail-value">{patientDetails.gender}</span></div>
-                        </div>
+                        <PatientDetailsGrid details={patientDetails} />
 
                         <button
                           className="btn-primary"

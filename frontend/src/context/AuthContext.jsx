@@ -27,12 +27,13 @@ export const AuthProvider = ({ children }) => {
 
   const login = useCallback(async (username, password) => {
     const data = await authService.login(username, password);
-    // Decode JWT to get patientId claim embedded by the backend AuthService
+    // Decode JWT to get the ABHA-ID claim embedded by the backend AuthService
     const claims = decodeJwtPayload(data.accessToken);
     const userObj = {
       username: data.username,
       role: data.role,
-      patientId: claims.patientId || null,
+      patientId: claims.abhaId || null,
+      abhaId: claims.abhaId || null,
       hospitalId: claims.hospitalId || null,
     };
     localStorage.setItem('accessToken', data.accessToken);

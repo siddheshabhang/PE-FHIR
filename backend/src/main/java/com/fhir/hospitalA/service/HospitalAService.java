@@ -80,57 +80,26 @@ public class HospitalAService {
      * Handles the full doctor-initiated OP Consult pipeline:
      * <ol>
      *   <li>Persist the visit record locally.</li>
-     *   <li>Enforce the consent gate — 403 if no active GRANTED consent.</li>
-     *   <li>Build &amp; filter the FHIR bundle according to granted data types.</li>
-     *   <li>Log a pending audit entry, validate, encode, mark success/failure.</li>
+     *   <li>Resolve the ABHA-ID from the local patient record when needed.</li>
+     *   <li>Build and validate the local FHIR bundle.</li>
      * </ol>
      *
      * @param consultRecord the inbound OP consult DTO
      * @param requesterId   the authenticated requester identity (from JWT subject)
-     * @return pretty-printed FHIR Bundle JSON
+     * @return success message for local consult storage
      */
     @Transactional
     public String processOPConsult(HospitalAOPConsultRecordDTO consultRecord, String requesterId) {
+        resolveConsultPatientIdentity(consultRecord);
 
         // 1. Persist the OPD visit locally immediately
         persistOPConsult(consultRecord);
 
-        // 2. Consent gate — must be checked before any outward data transfer
-        Set<String> grantedTypes = consentStore.getActiveGrantedDataTypes(
-                consultRecord.getAbhaId(), requesterId);
-
-        if (grantedTypes.isEmpty()) {
-            String reason = "No active GRANTED consent request found for patient: "
-                    + consultRecord.getAbhaId()
-                    + " and requester: " + requesterId
-                    + ". Call POST /consent/initiate first and wait for patient approval.";
-            // 403 FORBIDDEN — intentional business rule; local record was saved but outward transfer aborted
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, reason);
-        }
-
-        // 3. Build FHIR bundle and apply fine-grained privacy stripping
+        // 2. Build and validate the local FHIR bundle. Sharing is consent-gated
+        // later by the HIE pull/push flows, not by local consult submission.
         Bundle bundle = HospitalAOPConsultToFhirMapper.mapToBundle(consultRecord);
-        filterBundleByConsent(bundle, grantedTypes);
-
-        // 4. Audit → validate → encode
-        Long auditId = auditService.logPending(
-                consultRecord.getAbhaId() != null ? consultRecord.getAbhaId() : consultRecord.getPatientId(),
-                "HospitalA",
-                requesterId,
-                bundle.getEntry().size(),
-                grantedTypes.toString()
-        );
-
-        try {
-            bundleValidator.validate(bundle);
-            IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
-            String payload = parser.encodeResourceToString(bundle);
-            auditService.markSuccess(auditId);
-            return payload;
-        } catch (Exception e) {
-            auditService.markFailed(auditId, e.getMessage());
-            throw e;
-        }
+        bundleValidator.validate(bundle);
+        return "OP Consult record stored in Hospital A database successfully.";
     }
 
     // ── Patient-Initiated Push ───────────────────────────────────────────────
@@ -213,6 +182,23 @@ public class HospitalAService {
         entity.setBloodPressure(dto.getBloodPressure());
         entity.setPrescriptionPdfBase64(dto.getPrescriptionPdfBase64());
         consultRepository.save(entity);
+    }
+
+    private void resolveConsultPatientIdentity(HospitalAOPConsultRecordDTO dto) {
+        if (isBlank(dto.getAbhaId()) && !isBlank(dto.getPatientId()) && dto.getPatientId().startsWith("ABHA-")) {
+            dto.setAbhaId(dto.getPatientId());
+        }
+
+        if (isBlank(dto.getAbhaId()) && !isBlank(dto.getPatientId())) {
+            patientRepository.findById(dto.getPatientId())
+                .map(HospitalAPatient::getAbhaId)
+                .filter(abhaId -> !isBlank(abhaId))
+                .ifPresent(dto::setAbhaId);
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**

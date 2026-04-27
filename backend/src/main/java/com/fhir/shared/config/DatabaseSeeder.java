@@ -41,69 +41,69 @@ public class DatabaseSeeder implements CommandLineRunner {
             // Seed Hospitals
             Hospital hospA = new Hospital();
             hospA.setId("HOSP-A");
-            hospA.setName("City General Hospital");
-            hospA.setCode("CGH-01");
-            hospA.setLocation("New York");
-            hospA.setContactEmail("admin@citygeneral.com");
+            hospA.setName("Apollo Hospitals");
+            hospA.setCode("APL-MUM");
+            hospA.setLocation("Mumbai, Maharashtra");
+            hospA.setContactEmail("admin@apollo.in");
             hospitalRepository.save(hospA);
 
             Hospital hospB = new Hospital();
             hospB.setId("HOSP-B");
-            hospB.setName("Metro Medical Center");
-            hospB.setCode("MMC-02");
-            hospB.setLocation("Chicago");
-            hospB.setContactEmail("admin@metromedical.com");
+            hospB.setName("Fortis Healthcare");
+            hospB.setCode("FHL-DEL");
+            hospB.setLocation("New Delhi, Delhi");
+            hospB.setContactEmail("admin@fortis.in");
             hospitalRepository.save(hospB);
 
             // Create Admin
             RegisterRequest admin = new RegisterRequest();
             admin.setUsername("admin1");
-            admin.setPassword("adminone");
+            admin.setPassword("adminpassword");
             admin.setRole(UserRole.ADMIN);
-            admin.setFullName("Super Admin");
+            admin.setFullName("System Administrator");
             authService.register(admin);
 
             // Create Doctor 1 (HOSP-A)
             RegisterRequest doctor = new RegisterRequest();
-            doctor.setUsername("doctor1");
-            doctor.setPassword("doctorone");
+            doctor.setUsername("dr_sharma");
+            doctor.setPassword("doctorpassword");
             doctor.setRole(UserRole.DOCTOR);
             doctor.setHospitalId("HOSP-A");
-            doctor.setFullName("Dr. Deshmukh");
-            doctor.setSpecialization("General Physician");
+            doctor.setFullName("Dr. Rahul Sharma");
+            doctor.setSpecialization("Cardiology");
             authService.register(doctor);
 
             // Create Doctor 2 (HOSP-B)
             RegisterRequest doctor2 = new RegisterRequest();
-            doctor2.setUsername("doctor2");
-            doctor2.setPassword("doctortwo");
+            doctor2.setUsername("dr_gupta");
+            doctor2.setPassword("doctorpassword");
             doctor2.setRole(UserRole.DOCTOR);
             doctor2.setHospitalId("HOSP-B");
-            doctor2.setFullName("Dr. Chen");
-            doctor2.setSpecialization("Cardiologist");
+            doctor2.setFullName("Dr. Sneha Gupta");
+            doctor2.setSpecialization("Neurology");
             authService.register(doctor2);
 
             // Create Patient P-1001 (HOSP-A)
             RegisterRequest patient = new RegisterRequest();
-            patient.setUsername("patient1");
-            patient.setPassword("patientone");
+            patient.setUsername("rahul_verma");
+            patient.setPassword("patientpassword");
             patient.setRole(UserRole.PATIENT);
-            patient.setAbhaId("ABHA-1234-5678-9012-34");
+            patient.setAbhaId("ABHA-2233-4455-6677-88");
             patient.setHospitalId("HOSP-A");
-            patient.setFullName("Siddhesh Abhang");
+            patient.setFullName("Rahul Verma");
             authService.register(patient);
 
             // Create an initial consult record for the patient so push flow doesn't 404
             HospitalAOPConsultEntity consult = new HospitalAOPConsultEntity();
             consult.setPatientId("P-1001");
-            consult.setAbhaId("ABHA-1234-5678-9012-34");
-            consult.setPatientFirstName("Siddhesh");
-            consult.setPatientLastName("Abhang");
-            consult.setDoctorName("Dr. Deshmukh");
-            consult.setVisitDate("2026-04-20");
-            consult.setSymptoms("Fever, Cough");
-            consult.setTemperature(38.5);
-            consult.setBloodPressure("120/80");
+            consult.setAbhaId("ABHA-2233-4455-6677-88");
+            consult.setPatientFirstName("Rahul");
+            consult.setPatientLastName("Verma");
+            consult.setDoctorName("Dr. Rahul Sharma");
+            consult.setVisitDate("2026-04-25");
+            consult.setSymptoms("Chest pain, slight shortness of breath");
+            consult.setTemperature(37.2);
+            consult.setBloodPressure("145/90");
             consult.setPrescriptionPdfBase64(""); // keep empty
             consultRepository.save(consult);
 
@@ -111,7 +111,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             GlobalPatientIdentity gpi = new GlobalPatientIdentity();
             gpi.setGlobalId(UUID.randomUUID().toString());
             gpi.setHospitalAId("P-1001");
-            gpi.setName("Siddhesh Abhang");
+            gpi.setName("Rahul Verma");
             globalPatientIdentityRepository.save(gpi);
             System.out.println("✅ [DatabaseSeeder] Registered P-1001 in global identity registry.");
 

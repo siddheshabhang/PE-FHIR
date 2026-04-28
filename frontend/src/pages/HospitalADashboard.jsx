@@ -610,6 +610,26 @@ const HospitalADashboard = () => {
                         >
                           {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>📥</span> 2. Pull Data</>}
                         </button>
+
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{
+                            gridColumn: 'span 2',
+                            background: 'var(--c-primary-dark)',
+                            borderColor: 'var(--c-primary-dark)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            minHeight: '52px',
+                            width: '100%',
+                          }}
+                          onClick={handleHieSubmit}
+                          disabled={hieLoading || hiePolling}
+                        >
+                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>⚡</span> Auto Orchestrate (1 + 2)</>}
+                        </button>
                       </div>
                       
                     </div>

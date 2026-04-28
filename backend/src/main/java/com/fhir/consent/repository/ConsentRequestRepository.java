@@ -10,5 +10,6 @@ import java.util.List;
 @Repository
 public interface ConsentRequestRepository extends JpaRepository<ConsentRequestEntity, Long> {
     List<ConsentRequestEntity> findByPatientIdAndStatus(String patientId, ConsentStatus status);
+    List<ConsentRequestEntity> findByPatientId(String patientId);
     List<ConsentRequestEntity> findByPatientIdAndRequesterIdAndStatus(String patientId, String requesterId, ConsentStatus status);
 }

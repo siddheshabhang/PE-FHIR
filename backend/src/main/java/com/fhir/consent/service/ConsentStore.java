@@ -55,7 +55,7 @@ public class ConsentStore {
 
     @Transactional(readOnly = true)
     public List<ConsentRequestViewDTO> getPendingRequests(String patientId) {
-        return requestRepository.findByPatientIdAndStatus(patientId, ConsentStatus.PENDING)
+        return requestRepository.findByPatientId(patientId)
                 .stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());

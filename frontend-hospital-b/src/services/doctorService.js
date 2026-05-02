@@ -184,6 +184,15 @@ export const doctorService = {
     }
   },
 
+  lookupPatient: async (identifier) => {
+    try {
+      const res = await api.get(`/doctor/patients/lookup/${encodeURIComponent(identifier)}`);
+      return res.data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
   /**
    * GET /hospitalA/op-consult
    * (If applicable)

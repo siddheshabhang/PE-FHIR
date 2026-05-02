@@ -72,6 +72,13 @@ const getHospitalBDisplayId = (record) => {
 
 const hasPdfAttachment = (record) => !!record?.prescriptionPdfBase64;
 
+const shouldLookupPatientIdentifier = (identifier) => {
+  const trimmed = identifier.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('ABHA-')) return trimmed.length >= 12;
+  return trimmed.length >= 6;
+};
+
 const DoctorDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -89,6 +96,7 @@ const DoctorDashboard = () => {
 
   const [submitForm, setSubmitForm] = useState({
     patientId: '',
+    abhaId: '',
     patientName: '',
     consultDate: '',
     doctor: user?.username || '',
@@ -101,6 +109,9 @@ const DoctorDashboard = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitResult, setSubmitResult] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [patientLookupLoading, setPatientLookupLoading] = useState(false);
+  const [patientLookupMessage, setPatientLookupMessage] = useState('');
+  const [patientLookupError, setPatientLookupError] = useState('');
 
   const [fhirInput, setFhirInput] = useState('');
   const [fhirLoading, setFhirLoading] = useState(false);
@@ -158,7 +169,67 @@ const DoctorDashboard = () => {
     const { name, value } = e.target;
     setSubmitForm((prev) => ({ ...prev, [name]: value }));
     setSubmitErrors((prev) => ({ ...prev, [name]: '' }));
+    if (name === 'patientId') {
+      setPatientLookupMessage('');
+      setPatientLookupError('');
+      if (!value.trim()) {
+        setSubmitForm((prev) => ({ ...prev, abhaId: '' }));
+      }
+    }
   };
+
+  useEffect(() => {
+    if (activePanel !== 'submit') return undefined;
+
+    const identifier = submitForm.patientId.trim();
+    if (!shouldLookupPatientIdentifier(identifier)) {
+      setPatientLookupLoading(false);
+      if (!identifier) {
+        setPatientLookupMessage('');
+        setPatientLookupError('');
+      }
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      setPatientLookupLoading(true);
+      setPatientLookupError('');
+      try {
+        const patient = await doctorService.lookupPatient(identifier);
+        if (cancelled) return;
+
+        setSubmitForm((current) => {
+          if (current.patientId.trim() !== identifier) return current;
+          return {
+            ...current,
+            abhaId: patient.abhaId || (identifier.startsWith('ABHA-') ? identifier : ''),
+            patientName: patient.fullName || '',
+          };
+        });
+        setPatientLookupMessage(
+          patient.source === 'LOCAL'
+            ? 'Patient details autofilled from the hospital registry.'
+            : 'Patient details autofilled from the patient registry.'
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setPatientLookupMessage('');
+        if (err?.response?.status !== 404) {
+          setPatientLookupError(getApiErrorMessage(err, 'Failed to autofill patient details.'));
+        }
+      } finally {
+        if (!cancelled) {
+          setPatientLookupLoading(false);
+        }
+      }
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [activePanel, submitForm.patientId]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -186,6 +257,7 @@ const DoctorDashboard = () => {
       setSubmitResult(message || 'Consult stored successfully.');
       setSubmitForm({
         patientId: '',
+        abhaId: '',
         patientName: '',
         consultDate: '',
         doctor: user?.username || '',
@@ -194,6 +266,8 @@ const DoctorDashboard = () => {
         bloodPressure: '',
       });
       setSubmitPdf(null);
+      setPatientLookupMessage('');
+      setPatientLookupError('');
       fetchIntake();
     } catch (err) {
       setSubmitError(err?.response?.data?.message || err.message || 'Failed to store consult.');
@@ -384,6 +458,13 @@ const DoctorDashboard = () => {
                         <FieldRow label="Patient ID / ABHA-ID" name="patientId" value={submitForm.patientId} onChange={handleSubmitChange} placeholder="e.g. HB-P-1234 or ABHA-1234-5678-9012-34" error={submitErrors.patientId} />
                         <FieldRow label="Consult Date" name="consultDate" type="date" value={submitForm.consultDate} onChange={handleSubmitChange} error={submitErrors.consultDate} />
                       </div>
+                      {(patientLookupLoading || patientLookupMessage || patientLookupError) && (
+                        <div style={{ fontSize: '12px', marginTop: '-4px', color: patientLookupError ? 'var(--c-error-text)' : 'var(--c-text-muted)' }}>
+                          {patientLookupLoading
+                            ? 'Looking up patient details...'
+                            : patientLookupError || patientLookupMessage}
+                        </div>
+                      )}
                       <div className="form-row">
                         <FieldRow label="Patient Name" name="patientName" value={submitForm.patientName} onChange={handleSubmitChange} placeholder="Full patient name" error={submitErrors.patientName} />
                         <FieldRow label="Doctor" name="doctor" value={submitForm.doctor} onChange={handleSubmitChange} placeholder="Doctor name" />
@@ -631,7 +712,15 @@ const DoctorDashboard = () => {
                 </div>
                 <div className="submit-form">
                   {createPatientError && <div className="alert-error">{createPatientError}</div>}
-                  {createPatientResult && <div className="alert-success">Linked: {createPatientResult.localPatientId || createPatientResult.patientId}</div>}
+                  {createPatientResult && (
+                    <div className="alert-success">
+                      <div style={{ marginBottom: '8px' }}>✅ <strong>{createPatientResult.message}</strong></div>
+                      <div className="detail-grid">
+                        <div className="detail-row"><span className="detail-label">Patient ID:</span> <span className="detail-value">{createPatientResult.localPatientId || createPatientResult.patientId || createPatientResult.abhaId}</span></div>
+                        <div className="detail-row"><span className="detail-label">Patient Name:</span> <span className="detail-value">{createPatientResult.fullName || 'Not available'}</span></div>
+                      </div>
+                    </div>
+                  )}
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     setLinkLoading(true);

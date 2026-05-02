@@ -20,6 +20,9 @@ import java.util.Map;
 )
 public class HospitalAJpaConfig {
 
+    @org.springframework.beans.factory.annotation.Value("${spring.jpa.hibernate.ddl-auto:update}")
+    private String ddlAuto;
+
     @Bean(name = "hospitalAEntityManagerFactory")
     public LocalContainerEntityManagerFactoryBean hospitalAEntityManagerFactory(
             EntityManagerFactoryBuilder builder,
@@ -29,7 +32,7 @@ public class HospitalAJpaConfig {
             .packages("com.fhir.hospitalA.model")
             .persistenceUnit("hospitalA")
             .properties(Map.of(
-                "hibernate.hbm2ddl.auto", "update",
+                "hibernate.hbm2ddl.auto", ddlAuto,
                 "hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect"
             ))
             .build();

@@ -71,8 +71,12 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "DOCTOR")
 
                 // ── Doctor endpoints ────────────────────────────────────────
-                .requestMatchers(HttpMethod.POST, "/doctor/patients")
+                .requestMatchers(HttpMethod.GET, "/doctor/patients/lookup/**")
                     .hasRole("DOCTOR")
+                .requestMatchers(HttpMethod.POST, "/doctor/patients", "/doctor/patients/link/**")
+                    .hasRole("DOCTOR")
+                .requestMatchers(HttpMethod.GET, "/auth/register/patient/**")
+                    .hasAnyRole("ADMIN", "DOCTOR")
 
                 // ── Hospital B endpoints — ADMIN or DOCTOR only ─────────────
                 .requestMatchers(HttpMethod.POST, "/hospitalB/**")
@@ -98,6 +102,10 @@ public class SecurityConfig {
                 // NOTE: Every new endpoint should be listed above explicitly.
                 // This catch-all prevents accidental public exposure.
                 .anyRequest().authenticated()
+            )
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> 
+                    response.sendError(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED, authException.getMessage()))
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

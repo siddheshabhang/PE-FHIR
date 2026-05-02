@@ -71,6 +71,26 @@ const getApiErrorMessage = (err, fallback) => {
 
 const hasPdfAttachment = (record) => !!record?.prescriptionPdfBase64;
 
+const splitFullName = (fullName = '') => {
+  const trimmed = fullName.trim();
+  if (!trimmed) {
+    return { firstName: '', lastName: '' };
+  }
+
+  const parts = trimmed.split(/\s+/);
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' '),
+  };
+};
+
+const shouldLookupPatientIdentifier = (identifier) => {
+  const trimmed = identifier.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('ABHA-')) return trimmed.length >= 12;
+  return trimmed.length >= 6;
+};
+
 // ══════════════════════════════════════════════════════════════
 const HospitalADashboard = () => {
   const { user, logout } = useAuth();
@@ -90,7 +110,7 @@ const HospitalADashboard = () => {
 
   // ── Hospital A: Submit ────────────────────────────────────────
   const [submitForm, setSubmitForm] = useState({
-    patientId: '', patientFirstName: '', patientLastName: '',
+    patientId: '', abhaId: '', patientFirstName: '', patientLastName: '',
     doctorName: user?.username || '', visitDate: '',
     symptoms: '', temperature: '', bloodPressure: '',
   });
@@ -99,6 +119,9 @@ const HospitalADashboard = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitResult, setSubmitResult] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [patientLookupLoading, setPatientLookupLoading] = useState(false);
+  const [patientLookupMessage, setPatientLookupMessage] = useState('');
+  const [patientLookupError, setPatientLookupError] = useState('');
 
   const [hieForm, setHieForm] = useState({
     abhaId: '', scope: ['OP_CONSULT'], purpose: ''
@@ -139,7 +162,69 @@ const HospitalADashboard = () => {
     const { name, value } = e.target;
     setSubmitForm((f) => ({ ...f, [name]: value }));
     setSubmitErrors((p) => ({ ...p, [name]: '' }));
+    if (name === 'patientId') {
+      setPatientLookupMessage('');
+      setPatientLookupError('');
+      if (!value.trim()) {
+        setSubmitForm((f) => ({ ...f, abhaId: '' }));
+      }
+    }
   };
+
+  useEffect(() => {
+    if (activePanel !== 'submit') return undefined;
+
+    const identifier = submitForm.patientId.trim();
+    if (!shouldLookupPatientIdentifier(identifier)) {
+      setPatientLookupLoading(false);
+      if (!identifier) {
+        setPatientLookupMessage('');
+        setPatientLookupError('');
+      }
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      setPatientLookupLoading(true);
+      setPatientLookupError('');
+      try {
+        const patient = await doctorService.lookupPatient(identifier);
+        if (cancelled) return;
+
+        const { firstName, lastName } = splitFullName(patient.fullName || '');
+        setSubmitForm((current) => {
+          if (current.patientId.trim() !== identifier) return current;
+          return {
+            ...current,
+            abhaId: patient.abhaId || (identifier.startsWith('ABHA-') ? identifier : ''),
+            patientFirstName: firstName,
+            patientLastName: lastName,
+          };
+        });
+        setPatientLookupMessage(
+          patient.source === 'LOCAL'
+            ? 'Patient details autofilled from the hospital registry.'
+            : 'Patient details autofilled from the patient registry.'
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setPatientLookupMessage('');
+        if (err?.response?.status !== 404) {
+          setPatientLookupError(getApiErrorMessage(err, 'Failed to autofill patient details.'));
+        }
+      } finally {
+        if (!cancelled) {
+          setPatientLookupLoading(false);
+        }
+      }
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [activePanel, submitForm.patientId]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -164,8 +249,10 @@ const HospitalADashboard = () => {
       // TC-02 Fix: msg might be a JSON object (FHIR bundle) returned as string but parsed by Axios
       const displayMsg = (typeof msg === 'object') ? 'Record submitted and converted to FHIR successfully.' : (msg || 'Record submitted successfully.');
       setSubmitResult(displayMsg);
-      setSubmitForm({ patientId: '', patientFirstName: '', patientLastName: '', doctorName: user?.username || '', visitDate: '', symptoms: '', temperature: '', bloodPressure: '' });
+      setSubmitForm({ patientId: '', abhaId: '', patientFirstName: '', patientLastName: '', doctorName: user?.username || '', visitDate: '', symptoms: '', temperature: '', bloodPressure: '' });
       setSubmitPdf(null);
+      setPatientLookupMessage('');
+      setPatientLookupError('');
     } catch (err) {
       setSubmitError(err?.response?.data?.message || err.message || 'Submission failed.');
     } finally {
@@ -395,6 +482,13 @@ const HospitalADashboard = () => {
                         <FieldRow label="Patient ID / ABHA-ID" name="patientId" placeholder="e.g. P-1001 or ABHA-1234-5678-9012-34" value={submitForm.patientId} onChange={handleSubmitChange} error={submitErrors.patientId} />
                         <FieldRow label="Visit Date" name="visitDate" type="date" value={submitForm.visitDate} onChange={handleSubmitChange} error={submitErrors.visitDate} />
                       </div>
+                      {(patientLookupLoading || patientLookupMessage || patientLookupError) && (
+                        <div style={{ fontSize: '12px', marginTop: '-4px', color: patientLookupError ? 'var(--c-error-text)' : 'var(--c-text-muted)' }}>
+                          {patientLookupLoading
+                            ? 'Looking up patient details...'
+                            : patientLookupError || patientLookupMessage}
+                        </div>
+                      )}
                       <div className="form-row">
                         <FieldRow label="First Name" name="patientFirstName" placeholder="Patient first name" value={submitForm.patientFirstName} onChange={handleSubmitChange} error={submitErrors.patientFirstName} />
                         <FieldRow label="Last Name" name="patientLastName" placeholder="Patient last name" value={submitForm.patientLastName} onChange={handleSubmitChange} error={submitErrors.patientLastName} />
@@ -698,8 +792,7 @@ const HospitalADashboard = () => {
                         <div style={{ marginBottom: '8px' }}>✅ <strong>{createPatientResult.message}</strong></div>
                         <div className="detail-grid">
                           <div className="detail-row"><span className="detail-label">Patient ID:</span> <span className="detail-value">{createPatientResult.patientId || createPatientResult.localPatientId || createPatientResult.abhaId}</span></div>
-                          <div className="detail-row"><span className="detail-label">Username:</span> <span className="detail-value" style={{fontFamily: 'monospace'}}>{createPatientResult.username}</span></div>
-                          <div className="detail-row"><span className="detail-label">Password:</span> <span className="detail-value" style={{fontFamily: 'monospace'}}>{createPatientResult.tempPassword}</span></div>
+                          <div className="detail-row"><span className="detail-label">Patient Name:</span> <span className="detail-value">{createPatientResult.fullName || 'Not available'}</span></div>
                         </div>
                       </motion.div>
                     )}

@@ -14,19 +14,18 @@ import javax.sql.DataSource;
 import java.util.Map;
 
 @Configuration
-@EnableJpaRepositories(
-    basePackages = {
+@EnableJpaRepositories(basePackages = {
         "com.fhir.auth.repository",
         "com.fhir.consent.repository",
         "com.fhir.identity.repository",
         "com.fhir.shared.audit",
         "com.fhir.shared.hospital",
         "com.fhir.admin"
-    },
-    entityManagerFactoryRef = "fhirMainEntityManagerFactory",
-    transactionManagerRef = "fhirMainTransactionManager"
-)
+}, entityManagerFactoryRef = "fhirMainEntityManagerFactory", transactionManagerRef = "fhirMainTransactionManager")
 public class FhirMainJpaConfig {
+
+    @org.springframework.beans.factory.annotation.Value("${spring.jpa.hibernate.ddl-auto:update}")
+    private String ddlAuto;
 
     @Primary
     @Bean(name = "fhirMainEntityManagerFactory")
@@ -34,27 +33,24 @@ public class FhirMainJpaConfig {
             EntityManagerFactoryBuilder builder,
             @Qualifier("fhirMainDataSource") DataSource dataSource) {
         return builder
-            .dataSource(dataSource)
-            .packages(
-                "com.fhir.auth.model",
-                "com.fhir.consent.model",
-                "com.fhir.identity.model",
-                "com.fhir.shared.audit",
-                "com.fhir.shared.hospital"
-            )
-            .persistenceUnit("fhirMain")
-            .properties(Map.of(
-                "hibernate.hbm2ddl.auto", "update",
-                "hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect"
-            ))
-            .build();
+                .dataSource(dataSource)
+                .packages(
+                        "com.fhir.auth.model",
+                        "com.fhir.consent.model",
+                        "com.fhir.identity.model",
+                        "com.fhir.shared.audit",
+                        "com.fhir.shared.hospital")
+                .persistenceUnit("fhirMain")
+                .properties(Map.of(
+                        "hibernate.hbm2ddl.auto", ddlAuto,
+                        "hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect"))
+                .build();
     }
 
     @Primary
     @Bean(name = "fhirMainTransactionManager")
     public PlatformTransactionManager fhirMainTransactionManager(
-            @Qualifier("fhirMainEntityManagerFactory")
-            LocalContainerEntityManagerFactoryBean factory) {
+            @Qualifier("fhirMainEntityManagerFactory") LocalContainerEntityManagerFactoryBean factory) {
         return new JpaTransactionManager(factory.getObject());
     }
 }

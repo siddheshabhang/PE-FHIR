@@ -4,6 +4,7 @@ import com.fhir.auth.dto.RegisterRequest;
 import com.fhir.auth.model.AppUser;
 import com.fhir.auth.model.UserRole;
 import com.fhir.auth.service.AuthService;
+import com.fhir.doctor.dto.DoctorPatientLookupResponseDTO;
 import com.fhir.doctor.dto.DoctorPatientRequestDTO;
 import com.fhir.hospitalA.model.HospitalAPatient;
 import com.fhir.hospitalA.repository.HospitalAPatientRepository;
@@ -16,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -37,6 +39,33 @@ public class DoctorPatientController {
 
     @Autowired
     private SecurityContextHelper securityContextHelper;
+
+    @GetMapping("/lookup/{identifier}")
+    public DoctorPatientLookupResponseDTO lookupPatient(@PathVariable String identifier) {
+        String doctorHospitalId = securityContextHelper.extractHospitalId();
+        if (doctorHospitalId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Doctor is not associated with a hospital");
+        }
+
+        DoctorPatientLookupResponseDTO localMatch = findLocalPatient(identifier, doctorHospitalId);
+        if (localMatch != null) {
+            return localMatch;
+        }
+
+        AppUser globalUser = authService.findByAbhaId(identifier);
+        if (globalUser != null && globalUser.getRole() == UserRole.PATIENT) {
+            return new DoctorPatientLookupResponseDTO(
+                    null,
+                    globalUser.getAbhaId(),
+                    globalUser.getFullName(),
+                    globalUser.getDateOfBirth(),
+                    globalUser.getGender(),
+                    "GLOBAL"
+            );
+        }
+
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Patient not found for identifier: " + identifier);
+    }
 
     @PostMapping
     public Map<String, String> createPatient(@RequestBody DoctorPatientRequestDTO request) {
@@ -95,6 +124,17 @@ public class DoctorPatientController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Doctor is not associated with a hospital");
         }
 
+        DoctorPatientLookupResponseDTO existingLocalPatient = findLocalPatient(abhaId, doctorHospitalId);
+        if (existingLocalPatient != null && "LOCAL".equals(existingLocalPatient.getSource())) {
+            return Map.of(
+                    "message", "Patient already linked to hospital",
+                    "abhaId", abhaId,
+                    "localPatientId", existingLocalPatient.getPatientId(),
+                    "hospitalId", doctorHospitalId,
+                    "fullName", existingLocalPatient.getFullName() != null ? existingLocalPatient.getFullName() : ""
+            );
+        }
+
         AppUser user = authService.findByAbhaId(abhaId);
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Patient with ABHA-ID not found");
@@ -124,7 +164,8 @@ public class DoctorPatientController {
             "message", "Patient linked to hospital successfully",
             "abhaId", abhaId,
             "localPatientId", generatedPatientId,
-            "hospitalId", doctorHospitalId
+            "hospitalId", doctorHospitalId,
+            "fullName", user.getFullName() != null ? user.getFullName() : ""
         );
     }
 
@@ -136,5 +177,43 @@ public class DoctorPatientController {
         };
         int sequence = ThreadLocalRandom.current().nextInt(1000, 10000);
         return prefix + sequence;
+    }
+
+    private DoctorPatientLookupResponseDTO findLocalPatient(String identifier, String doctorHospitalId) {
+        if ("HOSP-A".equals(doctorHospitalId)) {
+            Optional<HospitalAPatient> patient = hospitalAPatientRepository.findById(identifier);
+            if (patient.isEmpty()) {
+                patient = hospitalAPatientRepository.findByAbhaId(identifier);
+            }
+            return patient
+                    .map(value -> new DoctorPatientLookupResponseDTO(
+                            value.getPatientId(),
+                            value.getAbhaId(),
+                            value.getName(),
+                            value.getDob(),
+                            value.getGender(),
+                            "LOCAL"
+                    ))
+                    .orElse(null);
+        }
+
+        if ("HOSP-B".equals(doctorHospitalId)) {
+            Optional<HospitalBPatient> patient = hospitalBPatientRepository.findByPatientId(identifier);
+            if (patient.isEmpty()) {
+                patient = hospitalBPatientRepository.findByAbhaId(identifier);
+            }
+            return patient
+                    .map(value -> new DoctorPatientLookupResponseDTO(
+                            value.getPatientId(),
+                            value.getAbhaId(),
+                            value.getFullName(),
+                            value.getDateOfBirth(),
+                            value.getGender(),
+                            "LOCAL"
+                    ))
+                    .orElse(null);
+        }
+
+        return null;
     }
 }

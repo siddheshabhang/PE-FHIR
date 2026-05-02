@@ -1,9 +1,0 @@
-
-> frontend-hospital-b@1.0.0 dev
-> vite --port 5175
-
-
-  VITE v8.0.10  ready in 247 ms
-
-  ➜  Local:   http://localhost:5175/
-  ➜  Network: use --host to expose

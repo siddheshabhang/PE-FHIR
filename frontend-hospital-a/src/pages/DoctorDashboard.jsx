@@ -63,6 +63,21 @@ const PatientDetailsGrid = ({ details }) => (
   </div>
 );
 
+const getApiErrorMessage = (err, fallback) => {
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+  const rawMessage =
+    (typeof data === 'string' && data.trim()) ||
+    data?.message ||
+    data?.error ||
+    err?.message ||
+    fallback;
+
+  return status ? `${rawMessage} (HTTP ${status})` : rawMessage;
+};
+
+const hasPdfAttachment = (record) => !!record?.prescriptionPdfBase64;
+
 // ══════════════════════════════════════════════════════════════
 const HospitalADashboard = () => {
   const { user, logout } = useAuth();
@@ -74,7 +89,8 @@ const HospitalADashboard = () => {
   useEffect(() => {
     setHieFhirResult('');
     setHieStatus(null);
-    setHieStatus(null);
+    setFhirResult(null);
+    setFhirError('');
     setSubmitResult('');
     setSubmitError('');
     setCreatePatientResult(null);
@@ -110,7 +126,10 @@ const HospitalADashboard = () => {
   const [hieError, setHieError] = useState('');
 
   // ── Add Patient / ABHA Link ───────────────────────────────────
+  const [fhirInput, setFhirInput] = useState('');
+  const [fhirLoading, setFhirLoading] = useState(false);
   const [fhirResult, setFhirResult] = useState(null);
+  const [fhirError, setFhirError] = useState('');
   const [abhaIdInput, setAbhaIdInput] = useState('');
   const [patientDetails, setPatientDetails] = useState(null);
   const [linkLoading, setLinkLoading] = useState(false);
@@ -197,7 +216,21 @@ const HospitalADashboard = () => {
         : [...p.requestedDataTypes, type],
     }));
 
-
+  const handleFhirReceive = async (e) => {
+    e.preventDefault();
+    if (!fhirInput.trim()) return;
+    setFhirLoading(true);
+    setFhirError('');
+    setFhirResult(null);
+    try {
+      const result = await doctorService.receiveFhirAtHospitalA(fhirInput.trim());
+      setFhirResult(result);
+    } catch (err) {
+      setFhirError(getApiErrorMessage(err, 'Failed to receive FHIR bundle.'));
+    } finally {
+      setFhirLoading(false);
+    }
+  };
 
   const handleHieSubmit = async (e) => {
     e.preventDefault();
@@ -236,7 +269,7 @@ const HospitalADashboard = () => {
         startPolling(result.consentRequestId);
       }
     } catch (err) {
-      setHieError(err?.response?.data?.message || 'Consent request failed.');
+      setHieError(getApiErrorMessage(err, 'Consent request failed.'));
     } finally {
       setHieLoading(false);
     }
@@ -255,7 +288,7 @@ const HospitalADashboard = () => {
         setHieError(result.message || 'No active consent found.');
       }
     } catch (err) {
-      setHieError(err?.response?.data?.message || 'Pull failed.');
+      setHieError(getApiErrorMessage(err, 'Pull failed.'));
     } finally {
       setHieLoading(false);
     }
@@ -296,6 +329,7 @@ const HospitalADashboard = () => {
 
   const PANELS = [
     { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital A → FHIR' },
+    { id: 'receive', label: 'Receive Bundle', icon: '📥', subtitle: 'Hospital A intake' },
     { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
     { id: 'create_patient', label: 'Add Patient', icon: '🧑‍⚕️', subtitle: 'Register a new patient' },
   ];
@@ -432,6 +466,75 @@ const HospitalADashboard = () => {
                       </button>
                     </div>
                   </form>
+                </div>
+              </motion.div>
+            )}
+
+            {activePanel === 'receive' && (
+              <motion.div
+                key="receive"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar panel-accent-bar--teal" />
+                  <div className="panel-icon panel-icon--teal">📥</div>
+                  <div>
+                    <div className="panel-title">Hospital A - Receive FHIR Bundle</div>
+                    <div className="panel-subtitle">Parse and store an inbound FHIR bundle from another hospital</div>
+                  </div>
+                </div>
+
+                <div className="submit-form">
+                  {fhirError && <div className="alert-error">⚠️ {fhirError}</div>}
+                  <form onSubmit={handleFhirReceive}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                      <div className="form-group">
+                        <label className="form-label">FHIR JSON Bundle</label>
+                        <textarea
+                          className="form-textarea"
+                          rows={9}
+                          placeholder="Paste FHIR JSON bundle here..."
+                          value={fhirInput}
+                          onChange={(e) => setFhirInput(e.target.value)}
+                          style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}
+                        />
+                      </div>
+                      <button type="submit" className="btn-primary" disabled={fhirLoading || !fhirInput.trim()}>
+                        {fhirLoading ? <><span className="btn-spinner" /> Parsing...</> : '📥 Parse FHIR Bundle'}
+                      </button>
+                    </div>
+                  </form>
+
+                  {fhirResult && (
+                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <div className="panel-icon panel-icon--teal" style={{ width: '28px', height: '28px', fontSize: '14px' }}>✅</div>
+                        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: '700', fontSize: '14px', color: 'var(--c-success-text)' }}>Parsed Successfully</span>
+                      </div>
+                      <div className="detail-grid">
+                        {[
+                          ['Patient ID', fhirResult.patientId],
+                          ['ABHA-ID', fhirResult.abhaId],
+                          ['Patient Name', [fhirResult.patientFirstName, fhirResult.patientLastName].filter(Boolean).join(' ')],
+                          ['Visit Date', fhirResult.visitDate],
+                          ['Doctor', fhirResult.doctorName],
+                          ['Clinical Notes', fhirResult.symptoms],
+                          ['Blood Pressure', fhirResult.bloodPressure],
+                          ['Temperature', fhirResult.temperature],
+                          ['Prescription PDF', hasPdfAttachment(fhirResult) ? 'Attached' : 'Not attached'],
+                        ].map(([label, val]) => (
+                          <div key={label} className="detail-row">
+                            <span className="detail-label">{label}</span>
+                            <span className="detail-value">{val || 'N/A'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               </motion.div>
             )}

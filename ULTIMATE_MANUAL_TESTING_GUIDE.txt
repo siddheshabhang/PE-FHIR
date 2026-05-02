@@ -1,0 +1,818 @@
+PE@FHIR ULTIMATE MANUAL TESTING GUIDE
+=====================================
+
+Purpose
+-------
+This document is a full manual test script for the PE@FHIR project.
+It covers:
+- backend readiness
+- login and protected routing
+- admin workflows
+- patient self-registration and self-service
+- doctor workflows at Hospital A and Hospital B
+- consent lifecycle
+- patient-driven push flow
+- HIE exchange flow
+- audit visibility
+- negative and regression checks
+
+Use this as the primary manual QA checklist for a real browser test run.
+
+
+1. Application Map
+------------------
+Backend:
+- Spring Boot API: http://localhost:8085
+
+Frontends:
+- Main frontend: http://localhost:5173
+- Hospital A frontend: http://localhost:5174
+- Hospital B frontend: http://localhost:5175
+
+Main roles:
+- ADMIN
+- DOCTOR
+- PATIENT
+
+Main routes:
+- /login
+- /admin/dashboard
+- /doctor/dashboard
+- /patient/dashboard
+
+
+2. Preconditions
+----------------
+Before starting, confirm:
+- PostgreSQL is running locally.
+- These databases exist:
+  - fhir_main
+  - hospital_a_db
+  - hospital_b_db
+- DB credentials match backend/src/main/resources/application.properties:
+  - username: fhir_user
+  - password: fhir_pass
+- Node and npm are installed.
+- Maven is installed, or the Maven wrapper works.
+
+Important note:
+- The frontend mock fallbacks are disabled in the code, so backend/API failures should surface during testing.
+
+
+3. Startup Instructions
+-----------------------
+Open 4 terminals from the repository root.
+
+Terminal 1: backend
+cd /Users/siddheshabhang/Desktop/PE@FHIR/backend
+mvn spring-boot:run
+
+Terminal 2: main frontend
+cd /Users/siddheshabhang/Desktop/PE@FHIR/frontend
+npm install
+npm run dev
+
+Terminal 3: Hospital A frontend
+cd /Users/siddheshabhang/Desktop/PE@FHIR/frontend-hospital-a
+npm install
+npm run dev
+
+Terminal 4: Hospital B frontend
+cd /Users/siddheshabhang/Desktop/PE@FHIR/frontend-hospital-b
+npm install
+npm run dev
+
+Expected:
+- backend responds on port 8085
+- main frontend responds on port 5173
+- hospital A frontend responds on port 5174
+- hospital B frontend responds on port 5175
+
+
+4. Seeded Accounts
+------------------
+These are created by the backend seeder on a fresh database.
+
+Admin
+- username: admin1
+- password: adminpassword
+
+Doctor at Hospital A
+- username: dr_sharma
+- password: doctorpassword
+
+Doctor at Hospital B
+- username: dr_gupta
+- password: doctorpassword
+
+Seeded patient
+- username: rahul_verma
+- password: patientpassword
+- ABHA-ID: ABHA-2233-4455-6677-88
+
+Seeded patient data
+- a Hospital A consult exists for the seeded patient
+- this supports push and exchange testing without extra setup
+
+
+5. Test Data To Create During Manual Run
+----------------------------------------
+Create and keep track of these values during the session:
+
+Patient created from public registration:
+- username: patient_manual_01 or another unique value
+- password: patient123
+- generated ABHA-ID: write this down from the success banner
+
+Suggested second patient created by doctor workflow:
+- first name: Priya
+- last name: Nair
+- email: priya.nair.manual@example.com
+- phone: 9999990001
+- date of birth: 1992-06-14
+- gender: Female
+
+Suggested HIE purpose text:
+- Cross-hospital continuity of care verification
+
+
+6. Recommended Execution Order
+------------------------------
+Run in this order:
+1. Environment and smoke checks
+2. Public login page validation
+3. Protected route and unauthorized checks
+4. Admin dashboard validation
+5. Public patient registration
+6. Patient login baseline
+7. Hospital A patient linking
+8. Hospital A consult submission
+9. Patient consultation visibility
+10. Patient push records flow
+11. Hospital B doctor validation
+12. HIE consent request flow
+13. Patient consent response flow
+14. HIE pull/exchange completion
+15. Consent revoke flow
+16. Negative and regression checks
+
+
+7. Smoke Checks
+---------------
+TC-SMOKE-01 Backend reachable
+Steps:
+- Open http://localhost:8085/swagger-ui/index.html
+Expected:
+- Swagger UI loads.
+
+TC-SMOKE-02 Main frontend reachable
+Steps:
+- Open http://localhost:5173/login
+Expected:
+- Login page renders with no blank screen.
+
+TC-SMOKE-03 Hospital-specific frontends reachable
+Steps:
+- Open http://localhost:5174
+- Open http://localhost:5175
+Expected:
+- Each frontend loads without fatal rendering errors.
+
+TC-SMOKE-04 Browser console sanity
+Steps:
+- Open DevTools console on the main frontend.
+- Refresh once.
+Expected:
+- No red-screen error.
+- No repeated auth loop.
+- No unhandled exception spam.
+
+
+8. Authentication and Routing
+-----------------------------
+TC-AUTH-01 Login page form behavior
+Steps:
+- On /login, inspect the login form.
+- Confirm role selector shows:
+  - Hospital Admin
+  - Doctor / Clinician
+  - Patient
+- Submit with empty username/password.
+Expected:
+- field validation appears
+- username and password are required
+
+TC-AUTH-02 Short credential validation
+Steps:
+- Enter username with fewer than 3 chars.
+- Enter password with fewer than 6 chars.
+- Submit.
+Expected:
+- client-side validation messages appear
+
+TC-AUTH-03 Admin login and routing
+Steps:
+- Log in as admin1 / adminpassword
+Expected:
+- redirect to /admin/dashboard
+- no unauthorized flash
+
+TC-AUTH-04 Doctor A login and routing
+Steps:
+- Sign out.
+- Log in as dr_sharma / doctorpassword
+Expected:
+- redirect to /doctor/dashboard
+- Hospital A doctor dashboard loads
+- page title indicates City General Hospital or Hospital A doctor context
+
+TC-AUTH-05 Doctor B login and routing
+Steps:
+- Sign out.
+- Log in as dr_gupta / doctorpassword
+Expected:
+- redirect to /doctor/dashboard
+- Hospital B doctor dashboard loads
+- page title indicates Metro Medical Center or Hospital B doctor context
+
+TC-AUTH-06 Patient login and routing
+Steps:
+- Sign out.
+- Log in as rahul_verma / patientpassword
+Expected:
+- redirect to /patient/dashboard
+- ABHA-ID badge or patient identifier is visible
+
+TC-AUTH-07 Invalid credentials
+Steps:
+- Log out.
+- Try username admin1 with a wrong password.
+Expected:
+- error message is shown
+- route stays on /login
+
+TC-AUTH-08 Protected route redirect when logged out
+Steps:
+- While logged out, manually open:
+  - /admin/dashboard
+  - /doctor/dashboard
+  - /patient/dashboard
+Expected:
+- each route redirects to /login
+
+TC-AUTH-09 Role isolation
+Steps:
+- Log in as patient.
+- Try to manually open /admin/dashboard.
+- Try to manually open /doctor/dashboard.
+Expected:
+- app redirects back to the patient dashboard
+
+TC-AUTH-10 Session persistence
+Steps:
+- Log in as any valid user.
+- Refresh the browser.
+Expected:
+- session remains active
+- dashboard still loads
+
+TC-AUTH-11 Logout cleanup
+Steps:
+- Click Sign Out from each role at least once during testing.
+Expected:
+- return to /login
+- protected routes are no longer accessible without logging back in
+
+
+9. Admin Dashboard
+------------------
+Use admin1 / adminpassword.
+
+TC-ADMIN-01 Overview loads
+Expected:
+- stat cards render
+- transfer counts show numbers
+- weekly transfer chart renders
+
+TC-ADMIN-02 Transfers tab
+Steps:
+- Open Transfers tab.
+- Apply each filter:
+  - ALL
+  - SUCCESS
+  - PENDING
+  - FAILED
+Expected:
+- list/table updates correctly
+- no crash when a filter has zero rows
+
+TC-ADMIN-03 Audit Logs tab
+Steps:
+- Open Audit Logs tab.
+- Search by:
+  - admin1
+  - TRANSFER
+  - patient identifier
+Expected:
+- search filters results
+- clearing search restores full set
+
+TC-ADMIN-04 Users tab
+Confirm these users exist:
+- admin1
+- dr_sharma
+- dr_gupta
+- rahul_verma
+
+TC-ADMIN-05 Admin sign-out
+Expected:
+- sign-out returns to login
+
+
+10. Public Patient Registration
+-------------------------------
+TC-PREG-01 Register new patient
+Steps:
+- On /login switch to register mode.
+- Select Patient.
+- Use:
+  - username: patient_manual_01 or unique value
+  - password: patient123
+  - full name: Manual Test Patient
+  - email: patient_manual_01@example.com
+  - phone: 9876543210
+  - gender: Female
+  - date of birth: 1995-01-15
+  - blood group: O+
+- Submit.
+Expected:
+- success banner appears
+- success banner contains generated ABHA-ID
+- form returns to sign-in mode
+
+Record and save:
+- patient username
+- patient password
+- generated ABHA-ID
+
+TC-PREG-02 Duplicate username rejection
+Steps:
+- Try registering another patient with the same username.
+Expected:
+- backend error is shown
+- account is not created twice
+
+
+11. Patient Dashboard Baseline
+------------------------------
+Use the newly registered patient.
+
+TC-PAT-01 New patient first login
+Expected:
+- patient dashboard loads
+- patient identifier is shown in the header
+- My Consultations is empty
+- Consent Requests is empty
+- Activity Log is empty or nearly empty
+
+TC-PAT-02 Tab switching
+Steps:
+- Open each tab:
+  - My Consultations
+  - Consent Requests
+  - Push Records
+  - Activity Log
+Expected:
+- no tab crashes
+- no broken layout
+
+TC-PAT-03 Push Records form baseline
+Expected:
+- hospital selector loads
+- doctor selector changes after hospital selection
+- at least one data type is preselected or selectable
+
+
+12. Hospital A Doctor Workflow
+------------------------------
+Log in as dr_sharma.
+
+TC-HA-01 Add Patient panel renders
+Steps:
+- Open Add Patient panel.
+Expected:
+- patient lookup/link UI is visible
+- form accepts ABHA-ID input
+
+TC-HA-02 Link newly registered patient by ABHA-ID
+Steps:
+- In Add Patient, enter the newly generated ABHA-ID from registration.
+- Fetch patient details if prompted.
+- Link the patient to Hospital A.
+Expected:
+- patient details load correctly
+- link succeeds
+- success message returns:
+  - ABHA-ID
+  - local patient ID
+  - hospital ID HOSP-A
+
+Write down:
+- Hospital A local patient ID for the new patient
+
+TC-HA-03 Link invalid ABHA-ID
+Steps:
+- Try linking a fake ABHA-ID such as ABHA-0000-0000-0000-00
+Expected:
+- not found or failure message appears
+- UI remains usable
+
+TC-HA-04 Submit Consult validation
+Steps:
+- Open Submit Consult.
+- Click submit with missing fields.
+Expected:
+- field-level validation appears
+
+TC-HA-05 Submit new consult for linked patient
+Steps:
+- Use the Hospital A local patient ID from TC-HA-02.
+- Enter:
+  - first name: Manual
+  - last name: Test Patient
+  - doctor name: keep default
+  - visit date: today or a clear recent date
+  - symptoms: headache and fatigue for 2 days
+  - temperature: 99.1
+  - blood pressure: 118/78
+- Optionally attach a small PDF prescription.
+- Submit.
+Expected:
+- success message appears
+- Hospital A record is stored
+- FHIR conversion succeeds
+- no page crash after submission
+
+TC-HA-06 Receive Bundle negative check
+Steps:
+- Open Receive Bundle.
+- Paste invalid JSON or random text.
+- Submit.
+Expected:
+- clear failure message appears
+- page remains stable
+
+
+13. Patient Consultation Visibility
+-----------------------------------
+Use the new patient account.
+
+TC-PAT-04 Consultation becomes visible
+Steps:
+- Log in as the newly registered patient after Hospital A consult submission.
+- Open My Consultations.
+Expected:
+- newly added consult appears
+- hospital name appears
+- doctor name appears
+- visit date appears
+- clinical notes appear
+- vitals appear
+- prescription state appears
+
+
+14. Patient Push Records Flow
+-----------------------------
+Use the new patient account.
+
+TC-PAT-05 Push Records to Hospital B doctor
+Steps:
+- Open Push Records.
+- Select target hospital HOSP-B.
+- Choose doctor dr_gupta if selectable.
+- Select data type OP_CONSULT.
+- Submit push.
+Expected:
+- success banner appears
+- activity log eventually records the push
+
+TC-PAT-06 Push Records validation
+Steps:
+- Clear doctor/requester selection and try to submit.
+Expected:
+- form does not submit successfully
+- no silent failure
+
+
+15. Hospital B Doctor Validation
+--------------------------------
+Log in as dr_gupta.
+
+TC-HB-01 Dashboard loads
+Expected:
+- Hospital B doctor dashboard opens
+- panel buttons are visible:
+  - Submit Consult
+  - Receive Bundle
+  - Request via HIE
+  - Add Patient
+
+TC-HB-02 Receive intake list after push or HIE import
+Steps:
+- Open Receive Bundle panel.
+Expected:
+- intake area/table loads
+- if push/import created records, they appear in the intake list
+
+TC-HB-03 Native consult submission validation
+Steps:
+- Open Submit Consult.
+- try submitting with missing fields
+Expected:
+- validation errors appear
+
+TC-HB-04 Native consult submission
+Steps:
+- Enter:
+  - patient ID: use an HB-form local ID only if you previously created one, otherwise use the Add Patient flow first
+  - patient name: Priya Nair
+  - consult date: today
+  - doctor: keep default
+  - clinical notes: follow-up neurology review
+  - temperature: 98.6
+  - blood pressure: 122/80
+- Submit.
+Expected:
+- success message appears
+- consult is visible in Hospital B intake list
+
+
+16. HIE Consent and Exchange Flow
+---------------------------------
+This is the most important end-to-end scenario.
+
+Primary path:
+- requester: Doctor at Hospital B
+- patient: newly registered patient or seeded patient
+- source data owner: Hospital A
+
+TC-HIE-01 Request consent only
+Steps:
+- Log in as dr_gupta.
+- Open Request via HIE.
+- Enter the patient ABHA-ID.
+- Leave scope as OP_CONSULT or choose extra scopes.
+- Purpose:
+  - Cross-hospital continuity of care verification
+- Click "Request Consent".
+Expected:
+- status returns consent pending
+- consent request ID is shown
+- no fatal error
+
+TC-HIE-02 Patient sees pending consent request
+Steps:
+- Log in as the same patient.
+- Open Consent Requests.
+Expected:
+- new request is visible
+- requester ID is visible
+- purpose is visible
+- requested data types are visible
+- status is PENDING
+
+TC-HIE-03 Deny consent path
+Steps:
+- Deny one pending request at least once during testing.
+Expected:
+- status becomes DENIED
+- patient success/error banner reflects denial
+- requester later sees denied/no active consent outcome
+
+TC-HIE-04 Grant consent path
+Steps:
+- Create a fresh HIE consent request if the first one was denied.
+- Log in as patient.
+- Grant consent.
+- Select at least OP_CONSULT.
+Expected:
+- request status becomes GRANTED
+- patient sees confirmation
+
+TC-HIE-05 Pull after grant
+Steps:
+- Return to dr_gupta.
+- In Request via HIE, use the same ABHA-ID.
+- Click Pull Data or rerun exchange as needed.
+Expected:
+- HIE returns SUCCESS
+- FHIR bundle is shown or copied
+- Hospital B auto-intakes the bundle where supported
+- Hospital B intake list shows the imported consultation
+
+TC-HIE-06 Polling behavior
+Steps:
+- Initiate another consent request.
+- Do not respond immediately as patient.
+Expected:
+- doctor sees a pending state
+- polling does not crash the page
+- final state updates when the patient responds
+
+TC-HIE-07 Invalid ABHA-ID through HIE
+Steps:
+- Use a fake ABHA-ID in the HIE panel.
+Expected:
+- identity-not-found or failure message appears
+
+
+17. Consent Revoke Flow
+-----------------------
+Use a patient account that currently has a GRANTED consent.
+
+TC-CONSENT-01 Revoke active consent
+Steps:
+- Open Consent Requests.
+- Revoke an active grant.
+Expected:
+- status becomes REVOKED
+- success message indicates revocation
+
+TC-CONSENT-02 Pull after revoke
+Steps:
+- As the requesting doctor, try pull-only or another exchange after revocation.
+Expected:
+- data should not be returned under revoked consent
+- error or no-active-consent message appears
+
+
+18. Activity and Audit Checks
+-----------------------------
+TC-AUDIT-01 Patient activity log after meaningful actions
+Steps:
+- As patient, open Activity Log after:
+  - consent grant or denial
+  - consent revoke
+  - records push
+Expected:
+- entries appear for recent actions
+
+TC-AUDIT-02 Admin sees transfer/audit evidence
+Steps:
+- As admin, review Transfers and Audit Logs after push/HIE actions.
+Expected:
+- new operational events are visible
+- statuses are sensible
+
+
+19. Doctor Add Patient Workflow
+-------------------------------
+Run at least one of these to validate doctor-created patient support.
+
+TC-DOCPAT-01 Hospital A doctor creates a brand-new patient
+Steps:
+- Log in as dr_sharma.
+- Open Add Patient.
+- Use the create-new-patient flow if available.
+- Enter:
+  - first name: Priya
+  - last name: Nair
+  - email: priya.nair.manual@example.com
+  - phone: 9999990001
+  - date of birth: 1992-06-14
+  - gender: Female
+- Submit.
+Expected:
+- success payload contains:
+  - local patient ID
+  - generated username
+  - temporary password
+  - hospital ID
+
+TC-DOCPAT-02 Login with doctor-created patient credentials
+Steps:
+- Use the returned username and temporary password.
+Expected:
+- patient can log in
+- patient dashboard opens
+
+
+20. Regression Checks
+---------------------
+TC-REG-01 Refresh on each dashboard
+Expected:
+- admin, doctor, and patient dashboards survive browser refresh while logged in
+
+TC-REG-02 Browser back/forward navigation
+Expected:
+- routing remains sane
+- protected routes do not expose the wrong dashboard
+
+TC-REG-03 Multi-tab behavior
+Steps:
+- Open a second tab while logged in.
+- Sign out in the first tab.
+- navigate in the second tab.
+Expected:
+- app should eventually require login again when protected API calls happen
+
+TC-REG-04 Form reset after success
+Expected:
+- successful submit flows clear or reset form state appropriately
+
+TC-REG-05 Layout sanity
+Check on desktop width and a narrow/mobile-width viewport:
+- login page
+- admin dashboard
+- doctor dashboard
+- patient dashboard
+Expected:
+- text is readable
+- buttons remain clickable
+- no overlapping sections
+
+
+21. Negative Tests
+------------------
+Run these if time permits, or always before a release candidate.
+
+TC-NEG-01 Submit Hospital A consult with nonnumeric temperature
+Expected:
+- validation blocks submission
+
+TC-NEG-02 Register doctor without hospital assignment
+Expected:
+- registration should fail or be blocked by validation when using the doctor role in UI
+
+TC-NEG-03 Patient attempts action with missing ABHA-linked JWT context
+Method:
+- log in with a patient account and watch for missing patient ID banner
+Expected:
+- app shows warning instead of crashing
+
+TC-NEG-04 Receive malformed FHIR bundle at Hospital A or B
+Expected:
+- clear backend/UI error
+- no white screen
+
+TC-NEG-05 Duplicate patient linking
+Steps:
+- try linking the same ABHA-ID to the same hospital more than once
+Expected:
+- either duplicate is prevented, or behavior is visibly understandable and does not corrupt the UI
+
+
+22. Release Gate
+----------------
+Consider the build manually passed only if all are true:
+- all seeded users can log in
+- a newly registered patient can log in
+- Hospital A can link a patient by ABHA-ID
+- Hospital A can submit a consult successfully
+- patient can see the consult
+- patient can push records
+- Hospital B can request consent through HIE
+- patient can grant and revoke consent
+- Hospital B can pull/import data after grant
+- admin sees operational data
+- no critical console errors or hard crashes occur during the run
+
+
+23. Suggested Defect Logging Template
+------------------------------------
+For each bug, record:
+- test case ID
+- environment URL
+- user role and username
+- exact input values
+- expected result
+- actual result
+- screenshot or console error
+- reproducibility: always / intermittent / once
+
+
+24. Known Project-Specific Notes
+--------------------------------
+- The backend seeds fresh data only when no users exist.
+- Frontend labels and backend seeded hospital names may not be perfectly identical in every place; validate behavior first, label mismatch second.
+- Access tokens are stored in localStorage.
+- Patient dashboard identity depends on the ABHA-ID claim present in the JWT.
+- The patient registration UI uses the patient-specific backend registration endpoint that generates an ABHA-ID automatically.
+
+
+25. Final Signoff Checklist
+---------------------------
+Mark each item PASS or FAIL:
+- Environment started cleanly
+- Admin flow passed
+- Patient public registration passed
+- Patient dashboard baseline passed
+- Hospital A doctor flow passed
+- Patient push flow passed
+- Hospital B doctor flow passed
+- HIE consent request passed
+- HIE grant and pull passed
+- Consent revoke passed
+- Audit visibility passed
+- Regression spot checks passed
+

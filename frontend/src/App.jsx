@@ -4,7 +4,6 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
-import DoctorDashboard from './pages/DoctorDashboard.jsx';
 import PatientDashboard from './pages/PatientDashboard.jsx';
 
 function App() {
@@ -22,16 +21,6 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['ADMIN']}>
                   <AdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Doctor */}
-            <Route
-              path="/doctor/dashboard"
-              element={
-                <ProtectedRoute allowedRoles={['DOCTOR']}>
-                  <DoctorDashboard />
                 </ProtectedRoute>
               }
             />

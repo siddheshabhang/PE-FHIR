@@ -2,19 +2,18 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { hospitalService } from '../services/hospitalService';
 
 const ROLES = [
   { value: 'ADMIN', label: 'Hospital Admin', icon: '🏥' },
-  { value: 'DOCTOR', label: 'Doctor / Clinician', icon: '👨‍⚕️' },
   { value: 'PATIENT', label: 'Patient', icon: '🧑' },
 ];
 
 const ROLE_ROUTES = {
   ADMIN: '/admin/dashboard',
-  DOCTOR: '/doctor/dashboard',
   PATIENT: '/patient/dashboard',
 };
+
+const DOCTOR_PORTAL_MESSAGE = 'Doctor sign-in is available only through the hospital portals. Please use the City General Hospital or Metro Medical Center doctor portal.';
 
 const FEATURES = [
   { icon: '🔒', label: 'HIPAA-compliant data transfer' },
@@ -24,22 +23,27 @@ const FEATURES = [
 ];
 
 const LoginPage = () => {
-  const { isAuthenticated, user, login, register } = useAuth();
+  const { isAuthenticated, user, login, register, logout } = useAuth();
   const navigate = useNavigate();
 
   const [isRegister, setIsRegister] = useState(false);
-  const [form, setForm] = useState({ username: '', password: '', role: 'DOCTOR', patientId: '', hospitalId: '', fullName: '', specialization: '', email: '', phone: '', gender: '', dateOfBirth: '', bloodGroup: '' });
-  const [hospitals, setHospitals] = useState([]);
+  const [form, setForm] = useState({ username: '', password: '', role: 'PATIENT', patientId: '', hospitalId: '', fullName: '', specialization: '', email: '', phone: '', gender: '', dateOfBirth: '', bloodGroup: '' });
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
-    hospitalService.getHospitals().then(setHospitals);
-  }, []);
+    if (isAuthenticated && user?.role === 'DOCTOR') {
+      logout();
+      setApiError(DOCTOR_PORTAL_MESSAGE);
+    }
+  }, [isAuthenticated, user, logout]);
 
   if (isAuthenticated && user) {
+    if (user.role === 'DOCTOR') {
+      return null;
+    }
     return <Navigate to={ROLE_ROUTES[user.role] || '/login'} replace />;
   }
 
@@ -50,7 +54,6 @@ const LoginPage = () => {
     if (!form.password) errs.password = 'Password is required';
     else if (form.password.length < 6) errs.password = 'At least 6 characters required';
     if (!form.role) errs.role = 'Please select a role';
-    if (isRegister && form.role === 'DOCTOR' && !form.hospitalId) errs.hospitalId = 'Hospital selection is required for doctors';
     return errs;
   };
 
@@ -78,6 +81,11 @@ const LoginPage = () => {
         setForm((f) => ({ ...f, password: '' }));
       } else {
         const userObj = await login(form.username, form.password);
+        if (userObj.role === 'DOCTOR') {
+          logout();
+          setApiError(DOCTOR_PORTAL_MESSAGE);
+          return;
+        }
         navigate(ROLE_ROUTES[userObj.role] || '/login');
       }
     } catch (err) {
@@ -164,6 +172,11 @@ const LoginPage = () => {
                 ? 'Register to access the interoperability platform'
                 : 'Enter your credentials to continue'}
             </p>
+            {!isRegister && (
+              <p className="login-card-subtitle" style={{ marginTop: '10px', fontSize: '13px' }}>
+                Doctor access is handled in the hospital-specific portals.
+              </p>
+            )}
           </div>
 
           <AnimatePresence mode="wait">
@@ -255,35 +268,6 @@ const LoginPage = () => {
                     value={form.fullName} onChange={handleChange}
                   />
                 </div>
-                
-                {form.role !== 'ADMIN' && (
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="hospitalId">Hospital Base</label>
-                    <select
-                      id="hospitalId" name="hospitalId"
-                      className={`form-input ${errors.hospitalId ? 'input-error' : ''}`}
-                      value={form.hospitalId} onChange={handleChange}
-                    >
-                      <option value="">-- Select a Hospital --</option>
-                      {hospitals.map(h => (
-                        <option key={h.id} value={h.id}>{h.name} ({h.id})</option>
-                      ))}
-                    </select>
-                    {errors.hospitalId && <span className="field-error">{errors.hospitalId}</span>}
-                  </div>
-                )}
-
-                {form.role === 'DOCTOR' && (
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="specialization">Specialization</label>
-                    <input
-                      id="specialization" name="specialization" type="text"
-                      className="form-input"
-                      placeholder="e.g. Cardiologist"
-                      value={form.specialization} onChange={handleChange}
-                    />
-                  </div>
-                )}
                 
                 {form.role === 'PATIENT' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '5px' }}>

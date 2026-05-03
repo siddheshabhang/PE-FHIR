@@ -686,7 +686,7 @@ const HospitalADashboard = () => {
                           ['Clinical Notes', fhirResult.symptoms],
                           ['Blood Pressure', fhirResult.bloodPressure],
                           ['Temperature', fhirResult.temperature],
-                          ['Prescription PDF', hasPdfAttachment(fhirResult) ? 'Attached' : 'Not attached'],
+                          ['Prescription PDF', hasPdfAttachment(fhirResult) ? <a href={`data:application/pdf;base64,${fhirResult.prescriptionPdfBase64}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-primary)', textDecoration: 'underline' }}>View PDF</a> : 'Not attached'],
                         ].map(([label, val]) => (
                           <div key={label} className="detail-row">
                             <span className="detail-label">{label}</span>

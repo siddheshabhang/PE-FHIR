@@ -537,7 +537,7 @@ const DoctorDashboard = () => {
                           <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: '700', fontSize: '14px', color: 'var(--c-success-text)' }}>Parsed Successfully</span>
                         </div>
                         <div className="detail-grid">
-                          {[['UHID', getHospitalBDisplayId(fhirResult)], ['Patient Name', fhirResult.patientName], ['Consult Date', fhirResult.consultDate], ['Doctor', fhirResult.doctor], ['Clinical Notes', fhirResult.clinicalNotes], ['Blood Pressure', fhirResult.vitals?.bp], ['Temperature', fhirResult.vitals?.temp], ['Prescription PDF', hasPdfAttachment(fhirResult) ? 'Attached' : 'Not attached']].map(([label, val]) => (
+                          {[['UHID', getHospitalBDisplayId(fhirResult)], ['Patient Name', fhirResult.patientName], ['Consult Date', fhirResult.consultDate], ['Doctor', fhirResult.doctor], ['Clinical Notes', fhirResult.clinicalNotes], ['Blood Pressure', fhirResult.vitals?.bp], ['Temperature', fhirResult.vitals?.temp], ['Prescription PDF', hasPdfAttachment(fhirResult) ? <a href={`data:application/pdf;base64,${fhirResult.prescriptionPdfBase64}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-primary)', textDecoration: 'underline' }}>View PDF</a> : 'Not attached']].map(([label, val]) => (
                             <div key={label} className="detail-row">
                               <span className="detail-label">{label}</span>
                               <span className="detail-value">{val || 'N/A'}</span>

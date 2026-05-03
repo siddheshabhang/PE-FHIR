@@ -61,13 +61,17 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/consent/pending/**")
                     .hasAnyRole("ADMIN", "PATIENT")
 
-                // ── Hospital A endpoints — ADMIN or DOCTOR only ─────────────
-                // Note: The ordering here is critical. The more specific push endpoint 
-                // must be evaluated before the wildcard /hospitalA/**, otherwise PATIENT 
-                // requests would fall through and be rejected with 403 Forbidden.
+                // ── Hospital A endpoints ─────────────────────────────────────
+                // Patient push must be listed before the wildcard rule.
                 .requestMatchers(HttpMethod.POST, "/hospitalA/op-consult/push")
                     .hasRole("PATIENT")
+                .requestMatchers(HttpMethod.GET, "/hospitalA/notifications")
+                    .hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.PATCH, "/hospitalA/notifications/**")
+                    .hasAnyRole("ADMIN", "DOCTOR")
                 .requestMatchers(HttpMethod.POST, "/hospitalA/**")
+                    .hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.GET, "/hospitalA/**")
                     .hasAnyRole("ADMIN", "DOCTOR")
 
                 // ── Doctor endpoints ────────────────────────────────────────
@@ -78,8 +82,17 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/auth/register/patient/**")
                     .hasAnyRole("ADMIN", "DOCTOR")
 
-                // ── Hospital B endpoints — ADMIN or DOCTOR only ─────────────
+                // ── Hospital B endpoints ─────────────────────────────────────
+                // Patient push must be listed before the wildcard rule.
+                .requestMatchers(HttpMethod.POST, "/hospitalB/op-consult/push")
+                    .hasRole("PATIENT")
+                .requestMatchers(HttpMethod.GET, "/hospitalB/notifications")
+                    .hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.PATCH, "/hospitalB/notifications/**")
+                    .hasAnyRole("ADMIN", "DOCTOR")
                 .requestMatchers(HttpMethod.POST, "/hospitalB/**")
+                    .hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.GET, "/hospitalB/**")
                     .hasAnyRole("ADMIN", "DOCTOR")
 
                 // ── Identity endpoints — ADMIN only ────────────────────────

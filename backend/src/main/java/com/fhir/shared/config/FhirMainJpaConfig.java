@@ -20,7 +20,8 @@ import java.util.Map;
         "com.fhir.identity.repository",
         "com.fhir.shared.audit",
         "com.fhir.shared.hospital",
-        "com.fhir.admin"
+        "com.fhir.admin",
+        "com.fhir.notification"
 }, entityManagerFactoryRef = "fhirMainEntityManagerFactory", transactionManagerRef = "fhirMainTransactionManager")
 public class FhirMainJpaConfig {
 
@@ -39,7 +40,8 @@ public class FhirMainJpaConfig {
                         "com.fhir.consent.model",
                         "com.fhir.identity.model",
                         "com.fhir.shared.audit",
-                        "com.fhir.shared.hospital")
+                        "com.fhir.shared.hospital",
+                        "com.fhir.notification")
                 .persistenceUnit("fhirMain")
                 .properties(Map.of(
                         "hibernate.hbm2ddl.auto", ddlAuto,

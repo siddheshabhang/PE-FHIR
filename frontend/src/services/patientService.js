@@ -87,16 +87,25 @@ export const patientService = {
   },
 
   /**
-   * POST /hospitalA/op-consult/push
-   * Body: PatientPushRequestDTO { targetRequesterId: String, dataTypes: Set<String> }
+   * POST /hospitalA/op-consult/push   (when target hospital is HOSP-A)
+   * POST /hospitalB/op-consult/push   (when target hospital is HOSP-B)
+   * Body: { targetRequesterId: String, dataTypes: Set<String> }
    * Backend uses JWT claim to identify which patient is pushing.
-   * Returns plain string success message.
+   * Returns plain string success message (FHIR bundle JSON).
+   *
+   * @param {string} targetRequesterId - doctor username
+   * @param {string[]} dataTypes - data types to push
+   * @param {string} targetHospitalId - 'HOSP-A' or 'HOSP-B'
    */
-  pushRecords: async (targetRequesterId, dataTypes) => {
+  pushRecords: async (targetRequesterId, dataTypes, targetHospitalId = 'HOSP-A') => {
     try {
+      // Patient records always live in Hospital A's DB (the patient's home hospital).
+      // We always call the Hospital A push endpoint, but pass targetHospitalId in the
+      // body so the backend can tag the notification with the correct doctor's hospital.
       const res = await api.post('/hospitalA/op-consult/push', {
         targetRequesterId,
         dataTypes,
+        targetHospitalId,
       });
       return res.data;
     } catch (err) {

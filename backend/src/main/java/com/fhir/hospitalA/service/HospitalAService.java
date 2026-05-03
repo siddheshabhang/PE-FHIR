@@ -12,6 +12,8 @@ import com.fhir.hospitalA.model.HospitalAOPConsultEntity;
 import com.fhir.hospitalA.model.HospitalAPatient;
 import com.fhir.hospitalA.repository.HospitalAOPConsultRepository;
 import com.fhir.hospitalA.repository.HospitalAPatientRepository;
+import com.fhir.notification.PatientPushNotification;
+import com.fhir.notification.PatientPushNotificationRepository;
 import com.fhir.shared.audit.AuditService;
 import com.fhir.shared.security.JwtUtil;
 import com.fhir.shared.validation.FHIRValidatorBundle;
@@ -52,6 +54,9 @@ public class HospitalAService {
 
     @Autowired
     private HospitalAOPConsultRepository consultRepository;
+
+    @Autowired
+    private PatientPushNotificationRepository pushNotificationRepository;
 
     @Autowired
     private AuditService auditService;
@@ -199,11 +204,63 @@ public class HospitalAService {
             IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
             String payload = parser.encodeResourceToString(bundle);
             auditService.markSuccess(auditId);
+
+            // Save a push notification so the target doctor sees it in their dashboard.
+            // Use the hospital the patient chose; fall back to HOSP-A for backward-compat.
+            String targetHospital = (pushRequest.getTargetHospitalId() != null
+                    && !pushRequest.getTargetHospitalId().isBlank())
+                    ? pushRequest.getTargetHospitalId()
+                    : "HOSP-A";
+
+            PatientPushNotification notification = new PatientPushNotification();
+            notification.setPatientAbhaId(patientId);
+            notification.setPatientName(
+                    latestConsult.getPatientFirstName() + " " + latestConsult.getPatientLastName());
+            notification.setTargetDoctorUsername(pushRequest.getTargetRequesterId());
+            notification.setHospitalCode(targetHospital);
+            notification.setDataTypes(
+                    pushRequest.getDataTypes() != null
+                            ? String.join(",", pushRequest.getDataTypes()) : "");
+            notification.setFhirBundleJson(payload);
+            notification.setRead(false);
+            pushNotificationRepository.save(notification);
+
             return payload;
         } catch (Exception e) {
             auditService.markFailed(auditId, e.getMessage());
             throw e;
         }
+    }
+
+    // ── Notification Support ─────────────────────────────────────────────────
+
+    /**
+     * Returns all push notifications sent to a specific doctor at Hospital A,
+     * newest first.
+     */
+    @Transactional(readOnly = true)
+    public List<PatientPushNotification> getNotificationsForDoctor(String doctorUsername) {
+        return pushNotificationRepository
+                .findByTargetDoctorUsernameAndHospitalCodeOrderByPushedAtDesc(
+                        doctorUsername, "HOSP-A");
+    }
+
+    /**
+     * Marks a single notification as read. Returns the updated entity.
+     * Throws 404 if not found, 403 if the notification does not belong to this doctor.
+     */
+    @Transactional
+    public PatientPushNotification markNotificationRead(Long notificationId, String doctorUsername) {
+        PatientPushNotification notification = pushNotificationRepository
+                .findById(notificationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Notification not found: " + notificationId));
+        if (!notification.getTargetDoctorUsername().equals(doctorUsername)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Notification does not belong to the authenticated doctor.");
+        }
+        notification.setRead(true);
+        return pushNotificationRepository.save(notification);
     }
 
     // ── Private Helpers ──────────────────────────────────────────────────────

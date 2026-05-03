@@ -138,7 +138,7 @@ const PatientDashboard = () => {
     if (!pushForm.targetRequesterId.trim() || !pushForm.dataTypes.length) return;
     setPushLoading(true); setPushResult('');
     try {
-      const msg = await patientService.pushRecords(pushForm.targetRequesterId, pushForm.dataTypes);
+      const msg = await patientService.pushRecords(pushForm.targetRequesterId, pushForm.dataTypes, pushForm.targetHospitalId);
       const displayMsg = (typeof msg === 'object') ? (msg.message || 'Records pushed successfully!') : (msg || 'Records pushed successfully!');
       setPushResult(`✅ ${displayMsg}`);
       setPushForm({ targetRequesterId: '', targetHospitalId: '', dataTypes: ['OP_CONSULT'] });

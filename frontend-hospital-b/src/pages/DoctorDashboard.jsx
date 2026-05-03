@@ -154,6 +154,42 @@ const DoctorDashboard = () => {
   const [hieError, setHieError] = useState('');
   const [copyFeedback, setCopyFeedback] = useState('');
 
+  // ── Inbound Notifications ────────────────────────────────────────────
+  const [notifications, setNotifications] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [expandedNotif, setExpandedNotif] = useState(null);
+
+  const fetchNotifications = async () => {
+    try {
+      setNotifLoading(true);
+      const data = await doctorService.getInboundNotifications();
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    } finally {
+      setNotifLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const intervalId = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const handleMarkRead = async (id) => {
+    try {
+      await doctorService.markNotificationRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      );
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   const validateSubmit = () => {
     const errors = {};
     if (!submitForm.patientId.trim()) errors.patientId = 'Required';
@@ -348,6 +384,7 @@ const DoctorDashboard = () => {
     { id: 'receive', label: 'Receive Bundle', icon: '📥', subtitle: 'Hospital B intake' },
     { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
     { id: 'create_patient', label: 'Add Patient', icon: '🧑‍⚕️', subtitle: 'Register a new patient' },
+    { id: 'inbound', label: 'Inbound Records', icon: '🔔', subtitle: 'Patient-pushed records', badge: unreadCount },
   ];
 
   return (
@@ -385,8 +422,18 @@ const DoctorDashboard = () => {
                   cursor: 'pointer', textAlign: 'left',
                   transition: 'all 0.15s ease',
                   boxShadow: activePanel === p.id ? 'var(--shadow-purple)' : 'var(--shadow-xs)',
+                  position: 'relative',
                 }}
               >
+                {p.badge > 0 && (
+                  <span style={{
+                    position: 'absolute', top: '8px', right: '10px',
+                    background: '#ef4444', color: '#fff',
+                    borderRadius: '999px', fontSize: '11px', fontWeight: '700',
+                    padding: '1px 7px', lineHeight: '18px',
+                    minWidth: '20px', textAlign: 'center',
+                  }}>{p.badge}</span>
+                )}
                 <div style={{ fontSize: '20px', marginBottom: '6px' }}>{p.icon}</div>
                 <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: '700', fontSize: '13.5px', color: activePanel === p.id ? 'var(--c-primary-dark)' : 'var(--c-text-primary)' }}>{p.label}</div>
                 <div style={{ fontSize: '11.5px', color: 'var(--c-text-muted)', marginTop: '2px' }}>{p.subtitle}</div>
@@ -606,7 +653,7 @@ const DoctorDashboard = () => {
                           onClick={handleConsentOnly}
                           disabled={hieLoading}
                         >
-                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>🔒</span> 1. Request Consent</>}
+                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{ fontSize: '18px' }}>🔒</span> 1. Request Consent</>}
                         </button>
 
                         <button
@@ -623,7 +670,7 @@ const DoctorDashboard = () => {
                           onClick={handlePullOnly}
                           disabled={hieLoading}
                         >
-                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>📥</span> 2. Pull Data</>}
+                          {hieLoading ? <span className="btn-spinner" /> : <><span style={{ fontSize: '18px' }}>📥</span> 2. Pull Data</>}
                         </button>
                       </div>
 
@@ -705,6 +752,142 @@ const DoctorDashboard = () => {
                       }}>Link Patient</button>
                     </div>
                   )}
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Inbound Records Panel ───────────────────────────── */}
+            {activePanel === 'inbound' && (
+              <motion.div
+                key="inbound"
+                className="card"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="panel-header" style={{ borderBottom: '1px solid var(--c-divider)' }}>
+                  <div className="panel-accent-bar" style={{ background: unreadCount > 0 ? '#ef4444' : 'var(--c-primary)' }} />
+                  <div className="panel-icon" style={{ color: unreadCount > 0 ? '#ef4444' : 'var(--c-primary)', fontSize: '22px' }}>🔔</div>
+                  <div style={{ flex: 1 }}>
+                    <div className="panel-title">Inbound Records</div>
+                    <div className="panel-subtitle">Patient-pushed FHIR records — {unreadCount > 0 ? `${unreadCount} unread` : 'all read'}</div>
+                  </div>
+                  <button
+                    className="btn-outline"
+                    style={{ fontSize: '12px', padding: '6px 14px' }}
+                    onClick={fetchNotifications}
+                    disabled={notifLoading}
+                  >
+                    {notifLoading ? '⏳' : '↻ Refresh'}
+                  </button>
+                </div>
+
+                <div className="submit-form">
+                  {notifications.length === 0 && !notifLoading && (
+                    <div style={{
+                      textAlign: 'center', padding: '40px 20px',
+                      color: 'var(--c-text-muted)', fontSize: '14px',
+                    }}>
+                      <div style={{ fontSize: '40px', marginBottom: '12px' }}>📭</div>
+                      No inbound records yet. When a patient pushes their records to you, they'll appear here.
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {notifications.map((notif) => (
+                      <motion.div
+                        key={notif.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        style={{
+                          borderRadius: 'var(--r-md)',
+                          border: `1px solid ${notif.read ? 'var(--c-border)' : 'var(--c-primary)'}`,
+                          background: notif.read ? 'var(--c-bg-alt)' : 'var(--c-primary-bg)',
+                          padding: '16px',
+                          borderLeft: `4px solid ${notif.read ? 'var(--c-border)' : '#3b82f6'}`,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {!notif.read && (
+                                <span style={{
+                                  background: '#3b82f6', color: '#fff',
+                                  borderRadius: '999px', fontSize: '10px', fontWeight: '700',
+                                  padding: '2px 8px',
+                                }}>NEW</span>
+                              )}
+                              <span style={{ fontWeight: '700', fontSize: '14px', color: 'var(--c-text-primary)' }}>
+                                {notif.patientName || 'Unknown Patient'}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--c-text-muted)', marginTop: '3px' }}>
+                              ABHA-ID: {notif.patientAbhaId}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', fontSize: '11px', color: 'var(--c-text-muted)' }}>
+                            {new Date(notif.pushedAt).toLocaleString()}
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {(notif.dataTypes || '').split(',').filter(Boolean).map((dt) => (
+                            <span key={dt} style={{
+                              background: 'var(--c-primary-bg)',
+                              color: 'var(--c-primary-dark)',
+                              border: '1px solid var(--c-primary)',
+                              borderRadius: '999px',
+                              fontSize: '11px', fontWeight: '600',
+                              padding: '2px 10px',
+                            }}>
+                              {dt.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                        </div>
+
+                        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            className="btn-outline"
+                            style={{ fontSize: '12px', padding: '6px 14px' }}
+                            onClick={() => setExpandedNotif(expandedNotif === notif.id ? null : notif.id)}
+                          >
+                            {expandedNotif === notif.id ? '▲ Hide FHIR Bundle' : '▼ View FHIR Bundle'}
+                          </button>
+                          {!notif.read && (
+                            <button
+                              className="btn-primary"
+                              style={{ fontSize: '12px', padding: '6px 14px', background: '#10b981', borderColor: '#10b981' }}
+                              onClick={() => handleMarkRead(notif.id)}
+                            >
+                              ✓ Mark as Read
+                            </button>
+                          )}
+                        </div>
+
+                        <AnimatePresence>
+                          {expandedNotif === notif.id && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              style={{ overflow: 'hidden', marginTop: '12px' }}
+                            >
+                              <div className="fhir-json-section">
+                                <span className="fhir-json-label">FHIR Bundle</span>
+                                <pre className="fhir-json" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                  {(() => {
+                                    try { return JSON.stringify(JSON.parse(notif.fhirBundleJson), null, 2); }
+                                    catch { return notif.fhirBundleJson; }
+                                  })()}
+                                </pre>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
               </motion.div>
             )}

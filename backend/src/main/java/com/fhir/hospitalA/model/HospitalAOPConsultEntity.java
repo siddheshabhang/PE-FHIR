@@ -24,21 +24,32 @@ public class HospitalAOPConsultEntity {
 
     private String patientFirstName;
     private String patientLastName;
-    
+
     @Column(nullable = false)
     private String doctorName;
-    
+
     private String visitDate;
-    
+
     @Column(columnDefinition = "TEXT")
     private String symptoms;
-    
+
     private double temperature;
     private String bloodPressure;
-    
+
     @Column(columnDefinition = "TEXT")
     private String prescriptionPdfBase64;
-    
+
+    // ── Provenance / interoperability fields ─────────────────────────────────
+    /** The originating hospital code (e.g. "HOSP-A", "HOSP-B"). Null = native record. */
+    private String sourceHospital;
+
+    /** The record ID in the source hospital's local DB, if transferred via FHIR. */
+    private String sourceRecordId;
+
+    /** True when this row was received from another hospital via a FHIR Bundle exchange. */
+    @Column(nullable = false)
+    private boolean receivedViaFhir = false;
+
     @Column(updatable = false)
     private Instant createdAt;
     

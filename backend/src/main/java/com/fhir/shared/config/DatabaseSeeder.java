@@ -10,6 +10,8 @@ import com.fhir.identity.model.GlobalPatientIdentity;
 import com.fhir.identity.repository.GlobalPatientIdentityRepository;
 import com.fhir.shared.hospital.Hospital;
 import com.fhir.shared.hospital.HospitalRepository;
+import com.fhir.hospitalB.model.HospitalBOPConsultEntity;
+import com.fhir.hospitalB.repository.HospitalBOPConsultRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -27,6 +29,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Autowired
     private HospitalAOPConsultRepository consultRepository;
+
+    @Autowired
+    private HospitalBOPConsultRepository hospitalBConsultRepository;
 
     @Autowired
     private GlobalPatientIdentityRepository globalPatientIdentityRepository;
@@ -105,7 +110,33 @@ public class DatabaseSeeder implements CommandLineRunner {
             consult.setTemperature(37.2);
             consult.setBloodPressure("145/90");
             consult.setPrescriptionPdfBase64(""); // keep empty
+            
+            // New Interoperability / Provenance fields
+            consult.setReceivedViaFhir(false);
+            consult.setSourceHospital("HOSP-A");
+            consult.setSourceRecordId(null);
+            
             consultRepository.save(consult);
+
+            // Create an initial consult record for Hospital B natively (diff format)
+            HospitalBOPConsultEntity consultB = new HospitalBOPConsultEntity();
+            consultB.setPatientId("HB-P-8002");
+            consultB.setAbhaId("ABHA-2233-4455-6677-88");
+            consultB.setPatientName("Rahul Verma");
+            consultB.setConsultDate("2026-03-15"); // Different date format/convention natively
+            consultB.setDoctor("Dr. Sneha Gupta");
+            consultB.setClinicalNotes("Patient complained of chronic headaches. Prescribed rest and hydration.");
+            consultB.setTemperature("98.6"); // Stored as String in Hosp B
+            consultB.setBloodPressure("120/80");
+            consultB.setConsentVerified(true);
+            consultB.setPrescriptionPdfBase64("");
+            
+            // New Interoperability / Provenance fields
+            consultB.setReceivedViaFhir(false);
+            consultB.setSourceHospital("HOSP-B");
+            consultB.setSourceRecordId(null);
+            
+            hospitalBConsultRepository.save(consultB);
 
             // Register the Hospital A local ID in global identity service
             GlobalPatientIdentity gpi = new GlobalPatientIdentity();
@@ -115,8 +146,16 @@ public class DatabaseSeeder implements CommandLineRunner {
             globalPatientIdentityRepository.save(gpi);
             System.out.println("✅ [DatabaseSeeder] Registered HA-P-1001 in global identity registry.");
 
+            // Register the Hospital B local ID as well
+            GlobalPatientIdentity gpiB = new GlobalPatientIdentity();
+            gpiB.setGlobalId(UUID.randomUUID().toString());
+            gpiB.setHospitalBId("HB-P-8002");
+            gpiB.setName("Rahul Verma");
+            globalPatientIdentityRepository.save(gpiB);
+            System.out.println("✅ [DatabaseSeeder] Registered HB-P-8002 in global identity registry.");
+
             System.out.println(
-                    "✅ [DatabaseSeeder] Successfully seeded mock Admin, Hospitals, Doctors, Patient, and OP Consult data.");
+                    "✅ [DatabaseSeeder] Successfully seeded mock Admin, Hospitals, Doctors, Patient, and OP Consult data for both formats.");
         } else {
             System.out.println("✅ [DatabaseSeeder] Database already populated. Skipping seeding.");
         }

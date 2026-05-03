@@ -13,7 +13,8 @@ import org.hl7.fhir.r4.model.Quantity;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.StringType;
 
-import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -31,11 +32,26 @@ public class FhirBundleToHospitalAMapper {
                 dto.setPatientId(identifier);
                 dto.setAbhaId(extractAbhaId(patient, identifier));
 
-                String fullName = extractPatientName(patient);
-                if (fullName != null && !fullName.isBlank()) {
-                    String[] parts = fullName.trim().split("\\s+", 2);
-                    dto.setPatientFirstName(parts[0]);
-                    dto.setPatientLastName(parts.length > 1 ? parts[1] : "");
+                // Prefer FHIR given/family fields so we don't re-split a joined string
+                HumanName name = patient.getName().isEmpty() ? null : patient.getNameFirstRep();
+                if (name != null) {
+                    // First name = first given name element
+                    String given = name.getGiven().stream()
+                            .map(StringType::getValue)
+                            .filter(v -> v != null && !v.isBlank())
+                            .findFirst().orElse("");
+                    // Last name = family element
+                    String family = name.hasFamily() ? name.getFamily() : "";
+
+                    if (!given.isBlank() || !family.isBlank()) {
+                        dto.setPatientFirstName(given.isBlank() ? family : given);
+                        dto.setPatientLastName(family.isBlank() ? "" : family);
+                    } else if (name.hasText() && !name.getText().isBlank()) {
+                        // Fallback: split full-text on first whitespace
+                        String[] parts = name.getText().trim().split("\\s+", 2);
+                        dto.setPatientFirstName(parts[0]);
+                        dto.setPatientLastName(parts.length > 1 ? parts[1] : "");
+                    }
                 }
             }
 
@@ -47,7 +63,14 @@ public class FhirBundleToHospitalAMapper {
             if (resource instanceof Encounter encounter
                     && encounter.getPeriod() != null
                     && encounter.getPeriod().getStart() != null) {
-                dto.setVisitDate(new SimpleDateFormat("dd MMM yyyy").format(encounter.getPeriod().getStart()));
+                // Hospital A native format: ISO date yyyy-MM-dd (matches seeder + DB)
+                DateTimeFormatter iso = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                dto.setVisitDate(
+                        encounter.getPeriod().getStart().toInstant()
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                                .format(iso)
+                );
             }
 
             if (resource instanceof Observation observation
@@ -114,13 +137,6 @@ public class FhirBundleToHospitalAMapper {
             }
         }
         return fallbackId;
-    }
-
-    private static String extractPatientName(Patient patient) {
-        if (patient.getName().isEmpty()) {
-            return null;
-        }
-        return extractHumanName(patient.getNameFirstRep());
     }
 
     private static String extractHumanName(HumanName name) {

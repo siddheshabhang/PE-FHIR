@@ -112,8 +112,30 @@ public class HospitalAService {
     @Transactional
     public HospitalAOPConsultRecordDTO receiveFhirBundle(String fhirJson) {
         Bundle bundle = fhirContext.newJsonParser().parseResource(Bundle.class, fhirJson);
+
+        // Validate BEFORE mapping — reject invalid FHIR bundles (HTTP 422) immediately
+        bundleValidator.validate(bundle);
+
         HospitalAOPConsultRecordDTO dto = FhirBundleToHospitalAMapper.map(bundle);
-        persistOPConsult(dto);
+
+        // Persist with provenance: mark this row as received from Hospital B via FHIR
+        HospitalAOPConsultEntity entity = new HospitalAOPConsultEntity();
+        entity.setPatientId(dto.getPatientId());
+        entity.setAbhaId(dto.getAbhaId());
+        entity.setPatientFirstName(dto.getPatientFirstName());
+        entity.setPatientLastName(dto.getPatientLastName());
+        entity.setDoctorName(dto.getDoctorName());
+        entity.setVisitDate(dto.getVisitDate());
+        entity.setSymptoms(dto.getSymptoms());
+        entity.setTemperature(dto.getTemperature());
+        entity.setBloodPressure(dto.getBloodPressure());
+        entity.setPrescriptionPdfBase64(dto.getPrescriptionPdfBase64());
+        // Provenance fields
+        entity.setReceivedViaFhir(true);
+        entity.setSourceHospital("HOSP-B");
+        entity.setSourceRecordId(dto.getAbhaId()); // best available cross-hospital key
+        consultRepository.save(entity);
+
         return dto;
     }
 

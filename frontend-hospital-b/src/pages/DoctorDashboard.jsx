@@ -92,6 +92,7 @@ const DoctorDashboard = () => {
     setCreatePatientResult(null);
     setSubmitResult('');
     setSubmitError('');
+    setCopyFeedback('');
   }, [activePanel]);
 
   const [submitForm, setSubmitForm] = useState({
@@ -149,7 +150,6 @@ const DoctorDashboard = () => {
   });
   const [hieLoading, setHieLoading] = useState(false);
   const [hieStatus, setHieStatus] = useState(null);
-  const [hiePolling, setHiePolling] = useState(false);
   const [hieFhirResult, setHieFhirResult] = useState('');
   const [hieError, setHieError] = useState('');
   const [copyFeedback, setCopyFeedback] = useState('');
@@ -291,29 +291,10 @@ const DoctorDashboard = () => {
     }
   };
 
-  const handleHieSubmit = async (e) => {
-    e.preventDefault();
-    if (!hieForm.abhaId.trim()) return;
-    setHieLoading(true); setHieError(''); setHieStatus(null); setHieFhirResult('');
-    try {
-      const result = await hieService.requestExchange(hieForm.abhaId, hieForm.scope, hieForm.purpose);
-      setHieStatus(result);
-      if (result.status === 'CONSENT_PENDING') startPolling(result.consentRequestId);
-      if (result.status === 'SUCCESS') {
-        setHieFhirResult(result.fhirBundle);
-        try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); fetchIntake(); } catch (e) {}
-      }
-    } catch (err) {
-      setHieError(getApiErrorMessage(err, 'Exchange failed.'));
-    } finally {
-      setHieLoading(false);
-    }
-  };
-
   const handleConsentOnly = async (e) => {
     e.preventDefault();
     if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
-    setHieLoading(true); setHieError(null);
+    setHieLoading(true); setHieError(null); setHieFhirResult(''); setCopyFeedback('');
     try {
       const result = await hieService.initiateConsentOnly(hieForm.abhaId, hieForm.scope, hieForm.purpose);
       setHieStatus(result);
@@ -327,13 +308,12 @@ const DoctorDashboard = () => {
   const handlePullOnly = async (e) => {
     e.preventDefault();
     if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
-    setHieLoading(true); setHieError(null);
+    setHieLoading(true); setHieError(null); setHieFhirResult(''); setCopyFeedback('');
     try {
       const result = await hieService.pullOnly(hieForm.abhaId, hieForm.scope);
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
         setHieStatus(result);
-        try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); fetchIntake(); } catch (e) {}
       } else {
         setHieError(result.message || 'No active consent found.');
       }
@@ -342,30 +322,6 @@ const DoctorDashboard = () => {
     } finally {
       setHieLoading(false);
     }
-  };
-
-  const startPolling = (consentId) => {
-    setHiePolling(true);
-    const interval = setInterval(async () => {
-      try {
-        const result = await hieService.pollStatus(consentId);
-        setHieStatus(result);
-        if (result.status === 'SUCCESS') {
-          setHieFhirResult(result.fhirBundle);
-          setHiePolling(false);
-          clearInterval(interval);
-          try { await doctorService.receiveFhirAtHospitalB(result.fhirBundle); fetchIntake(); } catch (e) {}
-        }
-        if (result.status === 'DENIED' || result.status === 'REVOKED') {
-          setHiePolling(false);
-          clearInterval(interval);
-        }
-      } catch (err) {
-        setHiePolling(false);
-        clearInterval(interval);
-        setHieError(`Polling stopped: ${err?.response?.data?.message || err.message}`);
-      }
-    }, 3000);
   };
 
   const toggleHieScope = (type) =>
@@ -515,9 +471,15 @@ const DoctorDashboard = () => {
                         <label className="form-label">FHIR JSON Bundle</label>
                         <textarea className="form-textarea" rows={9} placeholder='Paste FHIR JSON bundle here…' value={fhirInput} onChange={(e) => setFhirInput(e.target.value)} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }} />
                       </div>
-                      <button type="submit" className="btn-primary" disabled={fhirLoading || !fhirInput.trim()}>
-                        {fhirLoading ? <><span className="btn-spinner" /> Parsing…</> : '📥 Parse FHIR Bundle'}
-                      </button>
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        <button type="submit" className="btn-primary" disabled={fhirLoading || !fhirInput.trim()}>
+                          {fhirLoading ? <><span className="btn-spinner" /> Parsing…</> : '📥 Parse FHIR Bundle'}
+                        </button>
+                        <button type="button" className="btn-outline" onClick={() => copyBundle(fhirInput)} disabled={!fhirInput.trim()}>
+                          Copy Bundle
+                        </button>
+                        {copyFeedback && <span style={{ fontSize: '12px', color: 'var(--c-text-muted)', alignSelf: 'center' }}>{copyFeedback}</span>}
+                      </div>
                     </div>
                   </form>
                   <AnimatePresence>
@@ -642,7 +604,7 @@ const DoctorDashboard = () => {
                             width: '100%',
                           }}
                           onClick={handleConsentOnly}
-                          disabled={hieLoading || hiePolling}
+                          disabled={hieLoading}
                         >
                           {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>🔒</span> 1. Request Consent</>}
                         </button>
@@ -659,7 +621,7 @@ const DoctorDashboard = () => {
                             width: '100%',
                           }}
                           onClick={handlePullOnly}
-                          disabled={hieLoading || hiePolling}
+                          disabled={hieLoading}
                         >
                           {hieLoading ? <span className="btn-spinner" /> : <><span style={{fontSize: '18px'}}>📥</span> 2. Pull Data</>}
                         </button>

@@ -9,6 +9,7 @@ import com.fhir.hospitalB.model.HospitalBPatient;
 import com.fhir.hospitalB.model.HospitalBOPConsultEntity;
 import com.fhir.hospitalB.repository.HospitalBOPConsultRepository;
 import com.fhir.hospitalB.repository.HospitalBPatientRepository;
+import com.fhir.shared.validation.FHIRValidatorBundle;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,9 @@ import java.util.List;
 public class HospitalBService {
 
     private final FhirContext fhirContext = FhirContext.forR4();
+
+    @Autowired
+    private FHIRValidatorBundle bundleValidator;
 
     @Autowired
     private HospitalBOPConsultRepository consultRepository;
@@ -46,8 +50,16 @@ public class HospitalBService {
     }
 
     /**
-     * Parses a FHIR Bundle JSON string and maps it to the Hospital B OP
-     * Consult DTO.
+     * Parses and validates a FHIR Bundle from another hospital, maps it into
+     * Hospital B's local schema, and persists it with provenance metadata.
+     *
+     * <p>Pipeline:
+     * <ol>
+     *   <li>Parse FHIR JSON → {@link Bundle}</li>
+     *   <li>Validate bundle against FHIR R4 base profiles (HTTP 422 on failure)</li>
+     *   <li>Map bundle → Hospital B DTO (yyyy-MM-dd date, plain numeric temp)</li>
+     *   <li>Persist entity with sourceHospital / receivedViaFhir provenance fields</li>
+     * </ol>
      *
      * @param fhirJson raw FHIR-compliant Bundle JSON
      * @return the mapped {@link HospitalBOPConsultRecordDTO}
@@ -55,24 +67,32 @@ public class HospitalBService {
     public HospitalBOPConsultRecordDTO receiveFhirBundle(String fhirJson) {
         IParser parser = fhirContext.newJsonParser();
         Bundle bundle = parser.parseResource(Bundle.class, fhirJson);
+
+        // Validate BEFORE mapping — reject invalid FHIR bundles (HTTP 422) immediately
+        bundleValidator.validate(bundle);
+
         HospitalBOPConsultRecordDTO dto = FhirBundleToHospitalBMapper.map(bundle);
 
-        // Persist to hospital_b_db
+        // Persist to hospital_b_db with provenance stamps
         HospitalBOPConsultEntity entity = new HospitalBOPConsultEntity();
         entity.setAbhaId(dto.getAbhaId());
         entity.setPatientId(dto.getPatientId());
         entity.setPatientName(dto.getPatientName());
-        entity.setConsultDate(dto.getConsultDate());
+        entity.setConsultDate(dto.getConsultDate());         // yyyy-MM-dd (Hospital B native)
         entity.setDoctor(dto.getDoctor());
         entity.setClinicalNotes(dto.getClinicalNotes());
         entity.setConsentVerified(dto.isConsentVerified());
         if (dto.getVitals() != null) {
             entity.setBloodPressure(dto.getVitals().getBp());
-            entity.setTemperature(dto.getVitals().getTemp());
+            entity.setTemperature(dto.getVitals().getTemp()); // plain decimal e.g. "40.0"
         }
         if (dto.getPrescriptionPdfBase64() != null) {
             entity.setPrescriptionPdfBase64(dto.getPrescriptionPdfBase64());
         }
+        // Provenance fields — make the interoperability story explicit in the DB row
+        entity.setReceivedViaFhir(true);
+        entity.setSourceHospital("HOSP-A");
+        entity.setSourceRecordId(dto.getAbhaId()); // best available cross-hospital key
         consultRepository.save(entity);
 
         return dto;
@@ -108,6 +128,8 @@ public class HospitalBService {
 
     /**
      * Called by HIPFhirClient when HIE requests data from Hospital B.
+     * The assembled bundle is validated before being serialised — invalid
+     * outbound FHIR never leaves Hospital B.
      */
     public String pullFhirBundle(String abhaId, String consentToken, java.util.Set<String> scope) {
         HospitalBOPConsultEntity consult = consultRepository
@@ -123,15 +145,18 @@ public class HospitalBService {
         dto.setConsultDate(consult.getConsultDate());
         dto.setDoctor(consult.getDoctor());
         dto.setClinicalNotes(consult.getClinicalNotes());
-        
+
         HospitalBOPConsultRecordDTO.Vitals vitals = new HospitalBOPConsultRecordDTO.Vitals();
         vitals.setBp(consult.getBloodPressure());
         vitals.setTemp(consult.getTemperature());
         dto.setVitals(vitals);
-        
+
         dto.setPrescriptionPdfBase64(consult.getPrescriptionPdfBase64());
 
         Bundle bundle = com.fhir.hospitalB.mapper.HospitalBOPConsultToFhirMapper.mapToBundle(dto);
+
+        // Validate outbound bundle — never serialise invalid FHIR
+        bundleValidator.validate(bundle);
 
         return fhirContext.newJsonParser()
             .setPrettyPrint(true)

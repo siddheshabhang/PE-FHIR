@@ -3,7 +3,8 @@ package com.fhir.hospitalB.mapper;
 import com.fhir.hospitalB.dto.HospitalBOPConsultRecordDTO;
 import org.hl7.fhir.r4.model.*;
 
-import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,8 +38,14 @@ public class FhirBundleToHospitalBMapper {
             if (resource instanceof Encounter encounter) {
                 if (encounter.getPeriod() != null
                         && encounter.getPeriod().getStart() != null) {
-                    SimpleDateFormat sdf = new SimpleDateFormat("dd MMM yyyy");
-                    dto.setConsultDate(sdf.format(encounter.getPeriod().getStart()));
+                    // Hospital B native format: ISO date yyyy-MM-dd
+                    DateTimeFormatter iso = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                    dto.setConsultDate(
+                            encounter.getPeriod().getStart().toInstant()
+                                    .atZone(ZoneId.systemDefault())
+                                    .toLocalDate()
+                                    .format(iso)
+                    );
                 }
             }
 
@@ -47,10 +54,11 @@ public class FhirBundleToHospitalBMapper {
                 if (obs.getCode() != null && !obs.getCode().getCoding().isEmpty()) {
                     String code = obs.getCode().getCodingFirstRep().getCode();
 
-                    // Temperature
+                    // Temperature — store as plain decimal string (Hospital B native: "40.0")
                     if ("8310-5".equals(code)) {
-                        if (obs.getValue() instanceof Quantity q) {
-                            vitals.setTemp(q.getValue() + " " + q.getUnit());
+                        if (obs.getValue() instanceof Quantity q && q.getValue() != null) {
+                            // Strip unit — Hospital B stores temperature as a bare numeric string
+                            vitals.setTemp(q.getValue().stripTrailingZeros().toPlainString());
                         }
                     }
                     if ("85354-9".equals(code)) {

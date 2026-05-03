@@ -31,6 +31,17 @@ public class HospitalBOPConsultEntity {
 
     private boolean consentVerified;
 
+    // ── Provenance / interoperability fields ─────────────────────────────────
+    /** The originating hospital code (e.g. "HOSP-A", "HOSP-B"). Null = native record. */
+    private String sourceHospital;
+
+    /** The record ID in the source hospital's local DB, if transferred via FHIR. */
+    private String sourceRecordId;
+
+    /** True when this row was received from another hospital via a FHIR Bundle exchange. */
+    @Column(nullable = false)
+    private boolean receivedViaFhir = false;
+
     @Column(nullable = false, updatable = false)
     private Instant receivedAt;
 

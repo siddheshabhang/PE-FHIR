@@ -8,6 +8,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.Date;
+import java.util.UUID;
 
 public class HospitalAOPConsultToFhirMapper {
     private static final DateTimeFormatter VISIT_DATE_FORMAT =
@@ -25,7 +26,7 @@ public class HospitalAOPConsultToFhirMapper {
 
         // ── Practitioner ─────────────────────────────────────────────────────
         Practitioner practitioner = new Practitioner();
-        practitioner.setId("PR-" + dto.getDoctorName().replace(" ", ""));
+        practitioner.setId("PR-" + UUID.randomUUID().toString());
         HumanName docName = new HumanName();
         docName.setText(dto.getDoctorName());
         practitioner.addName(docName);
@@ -47,6 +48,7 @@ public class HospitalAOPConsultToFhirMapper {
         }
 
         Encounter encounter = new Encounter();
+        encounter.setId(UUID.randomUUID().toString());
         encounter.setStatus(Encounter.EncounterStatus.FINISHED);
         encounter.setClass_(
                 new Coding()
@@ -57,10 +59,11 @@ public class HospitalAOPConsultToFhirMapper {
         encounter.setSubject(new Reference("Patient/" + (dto.getAbhaId() != null ? dto.getAbhaId() : dto.getPatientId())));
         encounter.setPeriod(new Period().setStart(visitDate)); // FIX applied here
         encounter.addParticipant()
-                .setIndividual(new Reference("Practitioner/" + practitioner.getId()));
+                .setIndividual(new Reference("Practitioner/" + practitioner.getIdPart()));
 
         // ── Observation: Temperature ─────────────────────────────────────────
         Observation temperatureObs = new Observation();
+        temperatureObs.setId(UUID.randomUUID().toString());
         temperatureObs.setStatus(Observation.ObservationStatus.FINAL);
         temperatureObs.setCode(new CodeableConcept().addCoding(
                 new Coding()
@@ -79,6 +82,7 @@ public class HospitalAOPConsultToFhirMapper {
 
         // ── Observation: Blood Pressure ──────────────────────────────────────
         Observation bpObs = new Observation();
+        bpObs.setId(UUID.randomUUID().toString());
         bpObs.setStatus(Observation.ObservationStatus.FINAL);
         bpObs.setCode(new CodeableConcept().addCoding(
                 new Coding()
@@ -129,6 +133,7 @@ public class HospitalAOPConsultToFhirMapper {
 
         // ── Observation: Symptoms ────────────────────────────────────────────
         Observation symptomsObs = new Observation();
+        symptomsObs.setId(UUID.randomUUID().toString());
         symptomsObs.setStatus(Observation.ObservationStatus.FINAL);
         symptomsObs.setCode(new CodeableConcept().addCoding(
                 new Coding()
@@ -140,27 +145,30 @@ public class HospitalAOPConsultToFhirMapper {
         symptomsObs.setSubject(new Reference("Patient/" + (dto.getAbhaId() != null ? dto.getAbhaId() : dto.getPatientId())));
 
         // ── DocumentReference (PDF prescription) ─────────────────────────────
-        DocumentReference docRef = new DocumentReference();
-        docRef.setStatus(Enumerations.DocumentReferenceStatus.CURRENT);
-        CodeableConcept docType = new CodeableConcept();
-        docType.addCoding()
-                .setSystem("http://loinc.org")
-                .setCode("60591-5")
-                .setDisplay("Prescription Document");
-        docRef.setType(docType);
-        docRef.setSubject(new Reference("Patient/" + (dto.getAbhaId() != null ? dto.getAbhaId() : dto.getPatientId())));
-
+        DocumentReference docRef = null;
         if (dto.getPrescriptionPdfBase64() != null
                 && !dto.getPrescriptionPdfBase64().isBlank()) {
             try {
                 byte[] pdfBytes = Base64.getDecoder().decode(
                         dto.getPrescriptionPdfBase64().trim());
+                docRef = new DocumentReference();
+                docRef.setId(UUID.randomUUID().toString());
+                docRef.setStatus(Enumerations.DocumentReferenceStatus.CURRENT);
+                CodeableConcept docType = new CodeableConcept();
+                docType.addCoding()
+                        .setSystem("http://loinc.org")
+                        .setCode("60591-5")
+                        .setDisplay("Prescription Document");
+                docRef.setType(docType);
+                docRef.setSubject(new Reference("Patient/" + (dto.getAbhaId() != null ? dto.getAbhaId() : dto.getPatientId())));
+
                 Attachment attachment = new Attachment();
                 attachment.setContentType("application/pdf");
                 attachment.setData(pdfBytes);
                 docRef.addContent().setAttachment(attachment);
             } catch (IllegalArgumentException ignored) {
-                // Invalid Base64 — skip PDF attachment but keep the DocumentReference
+                // Invalid Base64 — skip PDF attachment and do not create DocumentReference
+                docRef = null;
             }
         }
 
@@ -171,6 +179,7 @@ public class HospitalAOPConsultToFhirMapper {
         // status=ACTIVE means consent is currently valid.
         // provision.type=PERMIT means data transfer is allowed.
         Consent consent = new Consent();
+        consent.setId(UUID.randomUUID().toString());
         consent.setStatus(Consent.ConsentState.ACTIVE);
 
         // Scope: patient-privacy — covers sharing of personal health data
@@ -212,14 +221,24 @@ public class HospitalAOPConsultToFhirMapper {
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.COLLECTION);
 
-        bundle.addEntry().setResource(patient);
-        bundle.addEntry().setResource(practitioner);
-        bundle.addEntry().setResource(encounter);
-        bundle.addEntry().setResource(temperatureObs);
-        bundle.addEntry().setResource(bpObs);
-        bundle.addEntry().setResource(symptomsObs);
-        bundle.addEntry().setResource(docRef);
-        bundle.addEntry().setResource(consent);
+        addEntry(bundle, patient);
+        addEntry(bundle, practitioner);
+        addEntry(bundle, encounter);
+        addEntry(bundle, temperatureObs);
+        addEntry(bundle, bpObs);
+        addEntry(bundle, symptomsObs);
+        if (docRef != null) {
+            addEntry(bundle, docRef);
+        }
+        addEntry(bundle, consent);
         return bundle;
+    }
+
+    private static void addEntry(Bundle bundle, Resource resource) {
+        if (resource == null) return;
+        String idPart = resource.getIdElement().getIdPart();
+        bundle.addEntry()
+                .setFullUrl("http://pe-fhir.com/" + resource.getResourceType().name() + "/" + idPart)
+                .setResource(resource);
     }
 }

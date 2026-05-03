@@ -4,11 +4,14 @@ import com.fhir.hospitalA.dto.HospitalAOPConsultRecordDTO;
 import com.fhir.hospitalA.dto.PatientPushRequestDTO;
 import com.fhir.hospitalA.model.HospitalAPatient;
 import com.fhir.hospitalA.service.HospitalAService;
+import com.fhir.notification.PatientPushNotification;
 import com.fhir.shared.security.SecurityContextHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 /**
  * HTTP adapter for Hospital A endpoints.
@@ -61,5 +64,26 @@ public class HospitalAController {
         // Extract ABHA-ID from the JWT claim.
         String patientId = securityContextHelper.extractAbhaId();
         return hospitalAService.pushOPConsult(pushRequest, patientId);
+    }
+
+    // ── Doctor Inbound Notifications ────────────────────────────────────────
+
+    /**
+     * Returns all patient-push notifications for the authenticated doctor,
+     * newest first.
+     */
+    @GetMapping("/notifications")
+    public List<PatientPushNotification> getNotifications() {
+        String doctorUsername = securityContextHelper.getCurrentUsername();
+        return hospitalAService.getNotificationsForDoctor(doctorUsername);
+    }
+
+    /**
+     * Marks a specific notification as read.
+     */
+    @PatchMapping("/notifications/{id}/read")
+    public PatientPushNotification markRead(@PathVariable Long id) {
+        String doctorUsername = securityContextHelper.getCurrentUsername();
+        return hospitalAService.markNotificationRead(id, doctorUsername);
     }
 }

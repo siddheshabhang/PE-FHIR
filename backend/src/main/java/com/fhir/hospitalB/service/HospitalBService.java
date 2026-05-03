@@ -3,17 +3,24 @@ package com.fhir.hospitalB.service;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
 import com.fhir.hospitalB.dto.HospitalBOPConsultRecordDTO;
+import com.fhir.hospitalB.dto.PatientPushRequestBDTO;
 import com.fhir.hospitalB.mapper.FHIRToHospitalBMapper;
 import com.fhir.hospitalB.mapper.FhirBundleToHospitalBMapper;
+import com.fhir.hospitalB.mapper.HospitalBOPConsultToFhirMapper;
 import com.fhir.hospitalB.model.HospitalBPatient;
 import com.fhir.hospitalB.model.HospitalBOPConsultEntity;
 import com.fhir.hospitalB.repository.HospitalBOPConsultRepository;
 import com.fhir.hospitalB.repository.HospitalBPatientRepository;
+import com.fhir.notification.PatientPushNotification;
+import com.fhir.notification.PatientPushNotificationRepository;
 import com.fhir.shared.validation.FHIRValidatorBundle;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -36,6 +43,9 @@ public class HospitalBService {
 
     @Autowired
     private HospitalBPatientRepository patientRepository;
+
+    @Autowired
+    private PatientPushNotificationRepository pushNotificationRepository;
 
     /**
      * Parses a FHIR Patient JSON string and maps it to the Hospital B domain
@@ -178,5 +188,79 @@ public class HospitalBService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    // ── Patient-Initiated Push ───────────────────────────────────────────────
+
+    /**
+     * Patient-initiated push for Hospital B.
+     * Fetches the patient's latest consult, builds a FHIR bundle,
+     * and saves a push notification for the target doctor.
+     */
+    @Transactional
+    public String pushOPConsult(PatientPushRequestBDTO pushRequest, String patientAbhaId) {
+        HospitalBOPConsultEntity latestConsult = consultRepository
+                .findFirstByAbhaIdOrderByIdDesc(patientAbhaId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No recent OP consult record found for patient: " + patientAbhaId));
+
+        // Build DTO and FHIR bundle from latest consult
+        HospitalBOPConsultRecordDTO dto = new HospitalBOPConsultRecordDTO();
+        dto.setAbhaId(latestConsult.getAbhaId());
+        dto.setPatientId(latestConsult.getPatientId());
+        dto.setPatientName(latestConsult.getPatientName());
+        dto.setConsultDate(latestConsult.getConsultDate());
+        dto.setDoctor(latestConsult.getDoctor());
+        dto.setClinicalNotes(latestConsult.getClinicalNotes());
+        HospitalBOPConsultRecordDTO.Vitals vitals = new HospitalBOPConsultRecordDTO.Vitals();
+        vitals.setBp(latestConsult.getBloodPressure());
+        vitals.setTemp(latestConsult.getTemperature());
+        dto.setVitals(vitals);
+        dto.setPrescriptionPdfBase64(latestConsult.getPrescriptionPdfBase64());
+
+        Bundle bundle = HospitalBOPConsultToFhirMapper.mapToBundle(dto);
+        bundleValidator.validate(bundle);
+
+        IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);
+        String payload = parser.encodeResourceToString(bundle);
+
+        // Save push notification for the target doctor
+        PatientPushNotification notification = new PatientPushNotification();
+        notification.setPatientAbhaId(patientAbhaId);
+        notification.setPatientName(latestConsult.getPatientName());
+        notification.setTargetDoctorUsername(pushRequest.getTargetRequesterId());
+        notification.setHospitalCode("HOSP-B");
+        notification.setDataTypes(
+                pushRequest.getDataTypes() != null
+                        ? String.join(",", pushRequest.getDataTypes()) : "");
+        notification.setFhirBundleJson(payload);
+        notification.setRead(false);
+        pushNotificationRepository.save(notification);
+
+        return payload;
+    }
+
+    // ── Notification Support ───────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<PatientPushNotification> getNotificationsForDoctor(String doctorUsername) {
+        return pushNotificationRepository
+                .findByTargetDoctorUsernameAndHospitalCodeOrderByPushedAtDesc(
+                        doctorUsername, "HOSP-B");
+    }
+
+    @Transactional
+    public PatientPushNotification markNotificationRead(Long notificationId, String doctorUsername) {
+        PatientPushNotification notification = pushNotificationRepository
+                .findById(notificationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Notification not found: " + notificationId));
+        if (!notification.getTargetDoctorUsername().equals(doctorUsername)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Notification does not belong to the authenticated doctor.");
+        }
+        notification.setRead(true);
+        return pushNotificationRepository.save(notification);
     }
 }

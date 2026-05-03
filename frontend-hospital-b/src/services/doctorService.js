@@ -220,4 +220,23 @@ export const doctorService = {
       throw new Error('Failed to fetch Hospital B intake records');
     }
   },
+
+  /**
+   * GET /hospitalB/notifications
+   * Returns all push notifications for the authenticated doctor at Hospital B.
+   */
+  getInboundNotifications: async () => {
+    const res = await api.get('/hospitalB/notifications');
+    return res.data;
+  },
+
+  /**
+   * PATCH /hospitalB/notifications/{id}/read
+   * Marks a notification as read.
+   */
+  markNotificationRead: async (id) => {
+    const res = await api.patch(`/hospitalB/notifications/${id}/read`);
+    return res.data;
+  },
 };
+

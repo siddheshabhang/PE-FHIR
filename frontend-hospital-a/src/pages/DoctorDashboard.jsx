@@ -471,10 +471,10 @@ const HospitalADashboard = () => {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const PANELS = [
-    { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital A → FHIR' },
-    { id: 'receive', label: 'Receive Bundle', icon: '📥', subtitle: 'Hospital A intake' },
-    { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
     { id: 'create_patient', label: 'Add Patient', icon: '🧑‍⚕️', subtitle: 'Register a new patient' },
+    { id: 'submit', label: 'Submit Consult', icon: '📝', subtitle: 'Hospital A → FHIR' },
+    { id: 'hie', label: 'Request via HIE', icon: '🔗', subtitle: 'Federated exchange' },
+    { id: 'receive', label: 'Receive Bundle', icon: '📥', subtitle: 'Hospital A intake' },
     { id: 'inbound', label: 'Inbound Records', icon: '🔔', subtitle: 'Patient-pushed records', badge: unreadCount },
   ];
 
@@ -672,9 +672,17 @@ const HospitalADashboard = () => {
 
                   {fhirResult && (
                     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
                         <div className="panel-icon panel-icon--teal" style={{ width: '28px', height: '28px', fontSize: '14px' }}>✅</div>
-                        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: '700', fontSize: '14px', color: 'var(--c-success-text)' }}>Parsed Successfully</span>
+                        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: '700', fontSize: '14px', color: 'var(--c-success-text)', flex: 1 }}>Parsed Successfully</span>
+                        <button
+                          type="button"
+                          className="btn-outline"
+                          style={{ fontSize: '12px', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          onClick={() => copyBundle(JSON.stringify(fhirResult, null, 2))}
+                        >
+                          📋 {copyFeedback || 'Copy Parsed JSON'}
+                        </button>
                       </div>
                       <div className="detail-grid">
                         {[
@@ -847,8 +855,9 @@ const HospitalADashboard = () => {
                           className="btn-primary"
                           style={{ 
                             flex: 1, 
-                            background: 'var(--c-accent)', 
-                            borderColor: 'var(--c-accent)',
+                            background: '#6366f1', 
+                            borderColor: '#6366f1',
+                            color: '#fff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',

@@ -337,7 +337,6 @@ public class HospitalAService {
         allowed.add("Patient");
         allowed.add("Encounter");
         allowed.add("Practitioner");
-        allowed.add("DocumentReference");
         allowed.add("Consent");
 
         // Optional clinical types gated by consent grants
@@ -370,6 +369,7 @@ public class HospitalAService {
                 allowed.add("Medication");
                 allowed.add("MedicationRequest");
                 allowed.add("MedicationStatement");
+                allowed.add("DocumentReference");
             }
             if (grantedDataTypes.contains("LAB_RESULT")) {
                 allowed.add("Observation");

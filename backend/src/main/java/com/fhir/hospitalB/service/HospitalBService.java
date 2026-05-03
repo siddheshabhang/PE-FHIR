@@ -22,7 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Service layer for Hospital B.
@@ -164,6 +167,7 @@ public class HospitalBService {
         dto.setPrescriptionPdfBase64(consult.getPrescriptionPdfBase64());
 
         Bundle bundle = com.fhir.hospitalB.mapper.HospitalBOPConsultToFhirMapper.mapToBundle(dto);
+        filterBundleByConsent(bundle, scope);
 
         // Validate outbound bundle — never serialise invalid FHIR
         bundleValidator.validate(bundle);
@@ -171,6 +175,65 @@ public class HospitalBService {
         return fhirContext.newJsonParser()
             .setPrettyPrint(true)
             .encodeResourceToString(bundle);
+    }
+
+    private void filterBundleByConsent(Bundle bundle, Set<String> grantedDataTypes) {
+        Set<String> allowed = new HashSet<>();
+
+        // Structural / summary types always shared
+        allowed.add("Patient");
+        allowed.add("Encounter");
+        allowed.add("Practitioner");
+        allowed.add("Consent");
+
+        // Optional clinical types gated by consent grants
+        if (grantedDataTypes != null) {
+            // Legacy scope names
+            if (grantedDataTypes.contains("Medications")) {
+                allowed.add("Medication");
+                allowed.add("MedicationRequest");
+                allowed.add("MedicationStatement");
+            }
+            if (grantedDataTypes.contains("Diagnostics")) {
+                allowed.add("DiagnosticReport");
+                allowed.add("Observation");
+            }
+            if (grantedDataTypes.contains("LabResults")) {
+                allowed.add("Observation");
+            }
+            if (grantedDataTypes.contains("SurgicalHistory")) {
+                allowed.add("Procedure");
+            }
+            if (grantedDataTypes.contains("Allergies")) {
+                allowed.add("AllergyIntolerance");
+            }
+            // New canonical scope names
+            if (grantedDataTypes.contains("OP_CONSULT")) {
+                allowed.add("Observation"); // vitals + symptoms
+                allowed.add("DiagnosticReport");
+            }
+            if (grantedDataTypes.contains("PRESCRIPTION")) {
+                allowed.add("Medication");
+                allowed.add("MedicationRequest");
+                allowed.add("MedicationStatement");
+                allowed.add("DocumentReference");
+            }
+            if (grantedDataTypes.contains("LAB_RESULT")) {
+                allowed.add("Observation");
+                allowed.add("DiagnosticReport");
+            }
+        }
+
+        Iterator<Bundle.BundleEntryComponent> iterator = bundle.getEntry().iterator();
+        while (iterator.hasNext()) {
+            Bundle.BundleEntryComponent entry = iterator.next();
+            if (entry.getResource() != null) {
+                String resourceType = entry.getResource().getResourceType().name();
+                if (!allowed.contains(resourceType)) {
+                    iterator.remove();
+                }
+            }
+        }
     }
 
     private void resolvePatientIdentity(HospitalBOPConsultRecordDTO dto) {
@@ -220,6 +283,7 @@ public class HospitalBService {
         dto.setPrescriptionPdfBase64(latestConsult.getPrescriptionPdfBase64());
 
         Bundle bundle = HospitalBOPConsultToFhirMapper.mapToBundle(dto);
+        filterBundleByConsent(bundle, pushRequest.getDataTypes());
         bundleValidator.validate(bundle);
 
         IParser parser = fhirContext.newJsonParser().setPrettyPrint(true);

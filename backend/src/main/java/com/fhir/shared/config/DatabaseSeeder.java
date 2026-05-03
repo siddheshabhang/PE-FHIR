@@ -109,7 +109,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             consult.setSymptoms("Chest pain, slight shortness of breath");
             consult.setTemperature(37.2);
             consult.setBloodPressure("145/90");
-            consult.setPrescriptionPdfBase64(""); // keep empty
+            consult.setPrescriptionPdfBase64("JVBERi0xLjQKJcOkw7zDtsOfCjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nDPQM1Qo5ypUMFAwALJMLU31jBQsTAz1DBSKikqTdAwVyitLijLzEnXyC0tS01OLdAtKEvPSkzXyE0sS0/M0cjPz0hLz0tMzy1I1c1I1U7LzU4sLwFKNdY11jQ11TQ30DHRBwoXGhiDxhvqmliA1RhYA1TAn3gplbmRzdHJlYW0KZW5kb2JqCjMgMCBvYmoKOTIKZW5kb2JqCjQgMCBvYmoKPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCA1OTUgODQyXS9SZXNvdXJjZXM8PC9Gb250PDwvRjEgMSAwIFI+Pj4+L0NvbnRlbnRzIDIgMCBSL1BhcmVudCA1IDAgUj4+CmVuZG9iago1IDAgb2JqCjw8L1R5cGUvUGFnZXMvS2lkc1s0IDAgUl0vQ291bnQgMT4+CmVuZG9iagoxIDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+CmVuZG9iago2IDAgb2JqCjw8L1R5cGUvQ2F0YWxvZy9QYWdlcyA1IDAgUj4+CmVuZG9iagp4cmVmCjAgNwowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAyOTggMDAwMDAgbiAKMDAwMDAwMDAxNSAwMDAwMCBuIAcwMDAwMDAwMTgzIDAwMDAwIG4gCjAwMDAwMDAyMDIgMDAwMDAgbiAKMDAwMDAwMDI0NyAwMDAwMCBuIAcwMDAwMDAwMzY4IDAwMDAwIG4gCnRyYWlsZXIKPDwvU2l6ZSA3L1Jvb3QgNiAwIFI+PgpzdGFydHhyZWYKNDI0CiUlRU9GCg==");
             
             // New Interoperability / Provenance fields
             consult.setReceivedViaFhir(false);

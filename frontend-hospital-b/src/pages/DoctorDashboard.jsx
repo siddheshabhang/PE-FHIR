@@ -883,8 +883,24 @@ const DoctorDashboard = () => {
                               style={{ overflow: 'hidden', marginTop: '12px' }}
                             >
                               <div className="fhir-json-section">
-                                <span className="fhir-json-label">FHIR Bundle</span>
-                                <pre className="fhir-json" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                  <span className="fhir-json-label" style={{ margin: 0 }}>FHIR Bundle</span>
+                                  <button
+                                    type="button"
+                                    className="btn-outline"
+                                    style={{ fontSize: '11px', padding: '4px 10px', background: 'transparent', borderColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)' }}
+                                    onClick={() => {
+                                      try {
+                                        copyBundle(JSON.stringify(JSON.parse(notif.fhirBundleJson), null, 2));
+                                      } catch {
+                                        copyBundle(notif.fhirBundleJson);
+                                      }
+                                    }}
+                                  >
+                                    📋 {copyFeedback || 'Copy JSON'}
+                                  </button>
+                                </div>
+                                <pre className="fhir-json" style={{ maxHeight: '300px', overflowY: 'auto', marginTop: 0 }}>
                                   {(() => {
                                     try { return JSON.stringify(JSON.parse(notif.fhirBundleJson), null, 2); }
                                     catch { return notif.fhirBundleJson; }

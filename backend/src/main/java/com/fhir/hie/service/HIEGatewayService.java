@@ -191,6 +191,8 @@ public class HIEGatewayService {
                 .build();
         }
 
+        // Use strictly the scopes granted in the latest consent, overriding any historical merge
+        Set<String> strictGrantedTypes = latestConsent.getGrantedDataTypes();
         String consentToken = latestConsent.getConsentToken();
 
         Long auditId = auditService.logPending(
@@ -198,12 +200,12 @@ public class HIEGatewayService {
             request.getHip(),
             request.getHiu(),
             0,
-            grantedTypes.toString()
+            strictGrantedTypes.toString()
         );
 
         try {
             String fhirBundle = hipFhirClient.pullBundle(
-                request.getHip(), request.getPatientId(), consentToken, grantedTypes);
+                request.getHip(), request.getPatientId(), consentToken, strictGrantedTypes);
 
             auditService.markSuccess(auditId);
             System.out.println("✅ HIE Gateway: Successfully pulled FHIR bundle. Length: " + fhirBundle.length());

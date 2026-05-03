@@ -85,7 +85,7 @@ const PatientDashboard = () => {
         setConsults(consultData);
         const init = {};
         consentData.forEach((c) => {
-          init[c.id] = c.grantedDataTypes?.length ? c.grantedDataTypes : ['OP_CONSULT'];
+          init[c.id] = c.grantedDataTypes?.length ? c.grantedDataTypes : (c.requestedDataTypes?.length ? c.requestedDataTypes : ['OP_CONSULT']);
         });
         setGrantedTypes(init);
       })
@@ -97,7 +97,7 @@ const PatientDashboard = () => {
     setConsentLoading((p) => ({ ...p, [consent.id]: true }));
     setConsentMsg({ id: null, text: '', ok: true });
     try {
-      const types = grantedTypes[consent.id] || ['OP_CONSULT'];
+      const types = grantedTypes[consent.id] || (consent.requestedDataTypes?.length ? consent.requestedDataTypes : ['OP_CONSULT']);
       const updated = await patientService.respondToConsent(consent.id, grant, types);
       setConsents((p) => p.map((c) => (c.id === consent.id ? { ...c, ...updated } : c)));
       setConsentMsg({
@@ -356,7 +356,7 @@ const PatientDashboard = () => {
                                   {DATA_TYPES.map((type) => (
                                     <TypeCheckbox
                                       key={type} type={type}
-                                      checked={(grantedTypes[c.id] || ['OP_CONSULT']).includes(type)}
+                                      checked={(grantedTypes[c.id] || (c.requestedDataTypes?.length ? c.requestedDataTypes : ['OP_CONSULT'])).includes(type)}
                                       onChange={() => toggleGrantedType(c.id, type)}
                                     />
                                   ))}

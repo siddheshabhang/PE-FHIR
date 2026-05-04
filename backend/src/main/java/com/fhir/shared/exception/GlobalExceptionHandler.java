@@ -58,6 +58,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage());
     }
 
+    // ── Database Integrity Violations ─────────────────────────────────────────
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrity(org.springframework.dao.DataIntegrityViolationException ex) {
+        // Do not leak SQL schema details to the client
+        return build(HttpStatus.CONFLICT, "Database Conflict", "A database conflict occurred (e.g., duplicate entry).");
+    }
+
     // ── Catch-all ─────────────────────────────────────────────────────────────
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleAll(Exception ex) {

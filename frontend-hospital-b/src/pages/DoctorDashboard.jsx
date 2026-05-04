@@ -6,6 +6,17 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 import { hieService } from '../services/hieService.js';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { z } from 'zod';
+import DOMPurify from 'dompurify';
+
+const submitSchema = z.object({
+  patientId: z.string().min(1, 'Required'),
+  patientName: z.string().min(1, 'Required'),
+  consultDate: z.string().min(1, 'Required'),
+  clinicalNotes: z.string().min(1, 'Required'),
+  temperature: z.string().refine(val => !isNaN(parseFloat(val)), 'Required and must be a number'),
+  bloodPressure: z.string().min(1, 'Required'),
+});
 
 const SIDEBAR_ITEMS = [
   { to: '/doctor/dashboard', label: 'Dashboard', icon: '📊', end: true },
@@ -190,15 +201,16 @@ const DoctorDashboard = () => {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const validateSubmit = () => {
-    const errors = {};
-    if (!submitForm.patientId.trim()) errors.patientId = 'Required';
-    if (!submitForm.patientName.trim()) errors.patientName = 'Required';
-    if (!submitForm.consultDate) errors.consultDate = 'Required';
-    if (!submitForm.clinicalNotes.trim()) errors.clinicalNotes = 'Required';
-    if (!submitForm.temperature.trim()) errors.temperature = 'Required';
-    if (!submitForm.bloodPressure.trim()) errors.bloodPressure = 'Required';
-    return errors;
+  const validateSubmit = (data) => {
+    const result = submitSchema.safeParse(data);
+    if (!result.success) {
+      const e = {};
+      result.error.issues.forEach(issue => {
+        e[issue.path[0]] = issue.message;
+      });
+      return e;
+    }
+    return {};
   };
 
   const handleSubmitChange = (e) => {
@@ -277,7 +289,18 @@ const DoctorDashboard = () => {
 
   const handleNativeSubmit = async (e) => {
     e.preventDefault();
-    const errors = validateSubmit();
+    
+    // Sanitize inputs
+    const sanitizedForm = {
+      ...submitForm,
+      patientId: DOMPurify.sanitize(submitForm.patientId),
+      patientName: DOMPurify.sanitize(submitForm.patientName),
+      doctor: DOMPurify.sanitize(submitForm.doctor),
+      clinicalNotes: DOMPurify.sanitize(submitForm.clinicalNotes),
+      bloodPressure: DOMPurify.sanitize(submitForm.bloodPressure),
+    };
+
+    const errors = validateSubmit(sanitizedForm);
     if (Object.keys(errors).length) {
       setSubmitErrors(errors);
       return;
@@ -287,7 +310,7 @@ const DoctorDashboard = () => {
     setSubmitResult('');
     try {
       const message = await doctorService.submitHospitalBConsult({
-        ...submitForm,
+        ...sanitizedForm,
         prescriptionPdfBase64: submitPdf || '',
       });
       setSubmitResult(message || 'Consult stored successfully.');
@@ -329,10 +352,13 @@ const DoctorDashboard = () => {
 
   const handleConsentOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
+    const sanitizedAbhaId = DOMPurify.sanitize(hieForm.abhaId);
+    const sanitizedPurpose = DOMPurify.sanitize(hieForm.purpose);
+
+    if (!sanitizedAbhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true); setHieError(null); setHieFhirResult(''); setCopyFeedback('');
     try {
-      const result = await hieService.initiateConsentOnly(hieForm.abhaId, hieForm.scope, hieForm.purpose);
+      const result = await hieService.initiateConsentOnly(sanitizedAbhaId, hieForm.scope, sanitizedPurpose);
       setHieStatus(result);
     } catch (err) {
       setHieError(getApiErrorMessage(err, 'Consent request failed.'));
@@ -343,10 +369,11 @@ const DoctorDashboard = () => {
 
   const handlePullOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
+    const sanitizedAbhaId = DOMPurify.sanitize(hieForm.abhaId);
+    if (!sanitizedAbhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true); setHieError(null); setHieFhirResult(''); setCopyFeedback('');
     try {
-      const result = await hieService.pullOnly(hieForm.abhaId, hieForm.scope);
+      const result = await hieService.pullOnly(sanitizedAbhaId, hieForm.scope);
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
         setHieStatus(result);

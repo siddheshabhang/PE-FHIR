@@ -657,7 +657,7 @@ const HospitalADashboard = () => {
                       </div>
 
                       <button type="submit" className="btn-primary btn-full" disabled={submitLoading}>
-                        {submitLoading ? <><span className="btn-spinner" /> Converting to FHIR…</> : '🚀 Submit & Convert to FHIR R4'}
+                        {submitLoading ? <><span className="btn-spinner" /> Saving…</> : 'Save'}
                       </button>
                     </div>
                   </form>

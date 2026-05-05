@@ -519,7 +519,7 @@ const DoctorDashboard = () => {
                         </div>
                       </div>
                       <button type="submit" className="btn-primary" disabled={submitLoading}>
-                        {submitLoading ? <><span className="btn-spinner" /> Saving…</> : '💾 Save Hospital B Consult'}
+                        {submitLoading ? <><span className="btn-spinner" /> Saving…</> : 'Save'}
                       </button>
                     </div>
                   </form>

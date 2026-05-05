@@ -6,6 +6,18 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 import { hieService } from '../services/hieService.js';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { z } from 'zod';
+import DOMPurify from 'dompurify';
+
+const submitSchema = z.object({
+  patientId: z.string().min(1, 'Required'),
+  patientFirstName: z.string().min(1, 'Required'),
+  patientLastName: z.string().min(1, 'Required'),
+  visitDate: z.string().min(1, 'Required'),
+  symptoms: z.string().min(1, 'Required'),
+  temperature: z.string().refine(val => !isNaN(parseFloat(val)), 'Must be a number'),
+  bloodPressure: z.string().min(1, 'Required'),
+});
 
 const SIDEBAR_ITEMS = [
   { to: '/doctor/dashboard', label: 'Dashboard', icon: '📊', end: true },
@@ -184,17 +196,16 @@ const HospitalADashboard = () => {
   }, [activePanel]);
 
   // ── Handlers ─────────────────────────────────────────────────
-  const validateSubmit = () => {
-    const e = {};
-    if (!submitForm.patientId.trim()) e.patientId = 'Required';
-    if (!submitForm.patientFirstName.trim()) e.patientFirstName = 'Required';
-    if (!submitForm.patientLastName.trim()) e.patientLastName = 'Required';
-    if (!submitForm.visitDate) e.visitDate = 'Required';
-    if (!submitForm.symptoms.trim()) e.symptoms = 'Required';
-    if (!submitForm.temperature) e.temperature = 'Required';
-    else if (isNaN(submitForm.temperature)) e.temperature = 'Must be a number';
-    if (!submitForm.bloodPressure.trim()) e.bloodPressure = 'Required';
-    return e;
+  const validateSubmit = (data) => {
+    const result = submitSchema.safeParse(data);
+    if (!result.success) {
+      const e = {};
+      result.error.issues.forEach(issue => {
+        e[issue.path[0]] = issue.message;
+      });
+      return e;
+    }
+    return {};
   };
 
   const handleSubmitChange = (e) => {
@@ -275,14 +286,27 @@ const HospitalADashboard = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errs = validateSubmit();
+    
+    // Sanitize inputs
+    const sanitizedForm = {
+      ...submitForm,
+      patientId: DOMPurify.sanitize(submitForm.patientId),
+      patientFirstName: DOMPurify.sanitize(submitForm.patientFirstName),
+      patientLastName: DOMPurify.sanitize(submitForm.patientLastName),
+      doctorName: DOMPurify.sanitize(submitForm.doctorName),
+      symptoms: DOMPurify.sanitize(submitForm.symptoms),
+      bloodPressure: DOMPurify.sanitize(submitForm.bloodPressure),
+    };
+
+    const errs = validateSubmit(sanitizedForm);
     if (Object.keys(errs).length) { setSubmitErrors(errs); return; }
+    
     setSubmitLoading(true);
     setSubmitError(''); setSubmitResult('');
     try {
       const msg = await doctorService.submitPatientData({
-        ...submitForm,
-        temperature: parseFloat(submitForm.temperature),
+        ...sanitizedForm,
+        temperature: parseFloat(sanitizedForm.temperature),
         prescriptionPdfBase64: submitPdf || '',
       });
       // TC-02 Fix: msg might be a JSON object (FHIR bundle) returned as string but parsed by Axios
@@ -301,14 +325,17 @@ const HospitalADashboard = () => {
 
   const handleConsentSubmit = async (e) => {
     e.preventDefault();
-    if (!consentForm.patientId.trim() || !consentForm.purpose.trim()) {
+    const sanitizedPatientId = DOMPurify.sanitize(consentForm.patientId);
+    const sanitizedPurpose = DOMPurify.sanitize(consentForm.purpose);
+
+    if (!sanitizedPatientId.trim() || !sanitizedPurpose.trim()) {
       setConsentError('Patient ID and Purpose are required.');
       return;
     }
     setConsentLoading(true); setConsentError(''); setConsentResult(null);
     try {
       const result = await doctorService.initiateConsent(
-        consentForm.patientId, consentForm.purpose, consentForm.requestedDataTypes,
+        sanitizedPatientId, sanitizedPurpose, consentForm.requestedDataTypes,
       );
       setConsentResult(result);
       setConsentForm({ patientId: '', purpose: '', requestedDataTypes: ['OP_CONSULT'] });
@@ -345,14 +372,17 @@ const HospitalADashboard = () => {
 
   const handleHieSubmit = async (e) => {
     e.preventDefault();
-    if (!hieForm.abhaId.trim()) return;
+    const sanitizedAbhaId = DOMPurify.sanitize(hieForm.abhaId);
+    const sanitizedPurpose = DOMPurify.sanitize(hieForm.purpose);
+
+    if (!sanitizedAbhaId.trim()) return;
     setHieLoading(true);
     setHieError('');
     setHieStatus(null);
     setHieFhirResult('');
     try {
       const result = await hieService.requestExchange(
-        hieForm.abhaId, hieForm.scope, hieForm.purpose
+        sanitizedAbhaId, hieForm.scope, sanitizedPurpose
       );
       setHieStatus(result);
       if (result.status === 'CONSENT_PENDING') {
@@ -370,11 +400,14 @@ const HospitalADashboard = () => {
 
   const handleConsentOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
+    const sanitizedAbhaId = DOMPurify.sanitize(hieForm.abhaId);
+    const sanitizedPurpose = DOMPurify.sanitize(hieForm.purpose);
+
+    if (!sanitizedAbhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true);
     setHieError(null);
     try {
-      const result = await hieService.initiateConsentOnly(hieForm.abhaId, hieForm.scope, hieForm.purpose);
+      const result = await hieService.initiateConsentOnly(sanitizedAbhaId, hieForm.scope, sanitizedPurpose);
       setHieStatus(result);
       if (result.status === 'CONSENT_PENDING') {
         startPolling(result.consentRequestId);
@@ -388,11 +421,12 @@ const HospitalADashboard = () => {
 
   const handlePullOnly = async (e) => {
     e.preventDefault();
-    if (!hieForm.abhaId) return setHieError('ABHA-ID required.');
+    const sanitizedAbhaId = DOMPurify.sanitize(hieForm.abhaId);
+    if (!sanitizedAbhaId) return setHieError('ABHA-ID required.');
     setHieLoading(true);
     setHieError(null);
     try {
-      const result = await hieService.pullOnly(hieForm.abhaId, hieForm.scope);
+      const result = await hieService.pullOnly(sanitizedAbhaId, hieForm.scope);
       if (result.status === 'SUCCESS') {
         setHieFhirResult(result.fhirBundle);
       } else {
@@ -623,7 +657,7 @@ const HospitalADashboard = () => {
                       </div>
 
                       <button type="submit" className="btn-primary btn-full" disabled={submitLoading}>
-                        {submitLoading ? <><span className="btn-spinner" /> Converting to FHIR…</> : '🚀 Submit & Convert to FHIR R4'}
+                        {submitLoading ? <><span className="btn-spinner" /> Saving…</> : 'Save'}
                       </button>
                     </div>
                   </form>

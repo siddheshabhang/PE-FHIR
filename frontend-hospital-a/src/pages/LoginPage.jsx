@@ -10,7 +10,7 @@ const FEATURES = [
 ];
 
 const LoginPage = () => {
-  const { isAuthenticated, user, login, register } = useAuth();
+  const { isAuthenticated, user, login, register, logout } = useAuth();
   const navigate = useNavigate();
 
   const [isRegister, setIsRegister] = useState(false);

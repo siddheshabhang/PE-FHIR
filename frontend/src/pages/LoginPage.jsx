@@ -2,6 +2,23 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { z } from 'zod';
+import DOMPurify from 'dompurify';
+
+const loginSchema = z.object({
+  username: z.string().min(3, 'At least 3 characters required'),
+  password: z.string().min(6, 'At least 6 characters required'),
+  role: z.string().min(1, 'Please select a role')
+});
+
+const registerSchema = loginSchema.extend({
+  fullName: z.string().optional(),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  phone: z.string().optional(),
+  gender: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  bloodGroup: z.string().optional()
+});
 
 const ROLES = [
   { value: 'ADMIN', label: 'Hospital Admin', icon: '🏥' },
@@ -47,14 +64,17 @@ const LoginPage = () => {
     return <Navigate to={ROLE_ROUTES[user.role] || '/login'} replace />;
   }
 
-  const validate = () => {
-    const errs = {};
-    if (!form.username.trim()) errs.username = 'Username is required';
-    else if (form.username.length < 3) errs.username = 'At least 3 characters required';
-    if (!form.password) errs.password = 'Password is required';
-    else if (form.password.length < 6) errs.password = 'At least 6 characters required';
-    if (!form.role) errs.role = 'Please select a role';
-    return errs;
+  const validate = (data) => {
+    const schema = isRegister ? registerSchema : loginSchema;
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      const errs = {};
+      result.error.issues.forEach(issue => {
+        errs[issue.path[0]] = issue.message;
+      });
+      return errs;
+    }
+    return {};
   };
 
   const handleChange = (e) => {
@@ -65,13 +85,24 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errs = validate();
+    
+    // Sanitize inputs to prevent XSS
+    const sanitizedForm = {
+      ...form,
+      username: DOMPurify.sanitize(form.username),
+      fullName: DOMPurify.sanitize(form.fullName),
+      email: DOMPurify.sanitize(form.email),
+      phone: DOMPurify.sanitize(form.phone),
+    };
+
+    const errs = validate(sanitizedForm);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    
     setLoading(true);
     setApiError('');
     try {
       if (isRegister) {
-        const result = await register(form.username, form.password, form.role, '', form.hospitalId, form.fullName, form.specialization, form.email, form.phone, form.gender, form.dateOfBirth, form.bloodGroup);
+        const result = await register(sanitizedForm.username, form.password, sanitizedForm.role, '', sanitizedForm.hospitalId, sanitizedForm.fullName, sanitizedForm.specialization, sanitizedForm.email, sanitizedForm.phone, sanitizedForm.gender, sanitizedForm.dateOfBirth, sanitizedForm.bloodGroup);
         setSuccessMsg(
           form.role === 'PATIENT' && result?.abhaId
             ? `Patient registered successfully. ABHA-ID: ${result.abhaId}`
@@ -80,7 +111,7 @@ const LoginPage = () => {
         setIsRegister(false);
         setForm((f) => ({ ...f, password: '' }));
       } else {
-        const userObj = await login(form.username, form.password);
+        const userObj = await login(sanitizedForm.username, form.password);
         if (userObj.role === 'DOCTOR') {
           logout();
           setApiError(DOCTOR_PORTAL_MESSAGE);

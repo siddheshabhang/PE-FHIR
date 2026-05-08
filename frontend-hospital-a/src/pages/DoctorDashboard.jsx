@@ -55,8 +55,6 @@ const PATIENT_DETAIL_FIELDS = [
   ['Date of Birth', 'dateOfBirth', 'dob'],
   ['Gender', 'gender'],
   ['Blood Group', 'bloodGroup'],
-  ['Hospital Base', 'hospitalId'],
-  ['Role', 'role'],
 ];
 
 const patientDetailValue = (details, keys) => {
@@ -116,6 +114,7 @@ const HospitalADashboard = () => {
   const navigate = useNavigate();
 
   const [activePanel, setActivePanel] = useState('submit');
+  const [copyFeedback, setCopyFeedback] = useState('');
 
   // TC-05 Fix: Clear transient HIE/FHIR results when switching panels
   useEffect(() => {
@@ -126,6 +125,7 @@ const HospitalADashboard = () => {
     setSubmitResult('');
     setSubmitError('');
     setCreatePatientResult(null);
+    setCopyFeedback('');
   }, [activePanel]);
 
   // ── Hospital A: Submit ────────────────────────────────────────
@@ -471,6 +471,19 @@ const HospitalADashboard = () => {
         ? p.scope.filter(t => t !== type)
         : [...p.scope, type],
     }));
+
+  const copyBundle = async (bundle) => {
+    if (!bundle) return;
+    try {
+      const text = typeof bundle === 'string' ? bundle : JSON.stringify(bundle, null, 2);
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback('Bundle copied');
+    } catch {
+      setCopyFeedback('Copy failed');
+    } finally {
+      window.setTimeout(() => setCopyFeedback(''), 1800);
+    }
+  };
 
   // ── Notification polling ──────────────────────────────────────────────
   const fetchNotifications = async () => {

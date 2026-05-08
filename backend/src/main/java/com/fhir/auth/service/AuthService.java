@@ -4,6 +4,7 @@ import com.fhir.auth.dto.LoginRequest;
 import com.fhir.auth.dto.LoginResponse;
 import com.fhir.auth.dto.RegisterRequest;
 import com.fhir.auth.model.AppUser;
+import com.fhir.auth.model.UserRole;
 import com.fhir.auth.repository.AuthUserRepository;
 import com.fhir.shared.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -59,9 +61,31 @@ public class AuthService {
         return userRepository.save(user);
     }
 
+    @Transactional
+    public Map<String, String> registerUser(RegisterRequest request) {
+        AppUser saved = register(request);
+        return Map.of(
+                "message", "User registered successfully",
+                "username", saved.getUsername(),
+                "role", saved.getRole().name()
+        );
+    }
+
     @Transactional(readOnly = true)
     public AppUser findByAbhaId(String abhaId) {
         return userRepository.findByAbhaId(abhaId).orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, String>> getDoctorsByHospital(String hospitalId) {
+        return userRepository.findByRoleAndHospitalId(UserRole.DOCTOR, hospitalId)
+                .stream()
+                .map(doc -> Map.of(
+                        "username", doc.getUsername(),
+                        "fullName", doc.getFullName() != null ? doc.getFullName() : doc.getUsername(),
+                        "specialization", doc.getSpecialization() != null ? doc.getSpecialization() : "General"
+                ))
+                .toList();
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -106,6 +130,11 @@ public class AuthService {
         }
 
         return buildAccessToken(user);
+    }
+
+    @Transactional
+    public Map<String, String> refreshAccessToken(String rawRefreshToken) {
+        return Map.of("accessToken", refresh(rawRefreshToken));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

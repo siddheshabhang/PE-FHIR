@@ -77,7 +77,7 @@ public class SecurityConfig {
                 // ── Doctor endpoints ────────────────────────────────────────
                 .requestMatchers(HttpMethod.GET, "/doctor/patients/lookup/**")
                     .hasRole("DOCTOR")
-                .requestMatchers(HttpMethod.POST, "/doctor/patients", "/doctor/patients/link/**")
+                .requestMatchers(HttpMethod.POST, "/doctor/patients/link/**")
                     .hasRole("DOCTOR")
                 .requestMatchers(HttpMethod.GET, "/auth/register/patient/**")
                     .hasAnyRole("ADMIN", "DOCTOR")

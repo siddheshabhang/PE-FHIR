@@ -7,7 +7,6 @@ import com.fhir.hospitalA.dto.HospitalAOPConsultRecordDTO;
 import com.fhir.hospitalA.dto.PatientPushRequestDTO;
 import com.fhir.hospitalA.mapper.FhirBundleToHospitalAMapper;
 import com.fhir.hospitalA.mapper.HospitalAOPConsultToFhirMapper;
-import com.fhir.hospitalA.mapper.HospitalAToFHIRMapper;
 import com.fhir.hospitalA.model.HospitalAOPConsultEntity;
 import com.fhir.hospitalA.model.HospitalAPatient;
 import com.fhir.hospitalA.repository.HospitalAOPConsultRepository;
@@ -17,9 +16,7 @@ import com.fhir.notification.PatientPushNotificationRepository;
 import com.fhir.shared.audit.AuditService;
 import com.fhir.shared.security.JwtUtil;
 import com.fhir.shared.validation.FHIRValidatorBundle;
-import com.fhir.shared.validation.FHIRValidatorUtil;
 import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -64,23 +61,6 @@ public class HospitalAService {
     @Autowired
     private JwtUtil jwtUtil;
 
-    // ── Patient to FHIR ──────────────────────────────────────────────────────
-
-    /**
-     * Persists the patient locally, maps to a FHIR Patient resource, validates
-     * it, and returns the pretty-printed JSON string.
-     */
-    @Transactional
-    public String convertPatientToFhir(HospitalAPatient patient) {
-        patientRepository.save(patient);
-        Patient fhirPatient = HospitalAToFHIRMapper.mapToFHIRPatient(patient);
-        FHIRValidatorUtil.validate(fhirPatient);
-        return fhirContext
-                .newJsonParser()
-                .setPrettyPrint(true)
-                .encodeResourceToString(fhirPatient);
-    }
-
     // ── Doctor-Initiated OP Consult ──────────────────────────────────────────
 
     /**
@@ -107,11 +87,6 @@ public class HospitalAService {
         Bundle bundle = HospitalAOPConsultToFhirMapper.mapToBundle(consultRecord);
         bundleValidator.validate(bundle);
         return "OP Consult record stored in Hospital A database successfully.";
-    }
-
-    @Transactional(readOnly = true)
-    public List<HospitalAOPConsultEntity> getAllConsults() {
-        return consultRepository.findAllByOrderByCreatedAtDesc();
     }
 
     @Transactional

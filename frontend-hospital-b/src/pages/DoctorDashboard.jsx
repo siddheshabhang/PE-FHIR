@@ -44,8 +44,6 @@ const PATIENT_DETAIL_FIELDS = [
   ['Date of Birth', 'dateOfBirth', 'dob'],
   ['Gender', 'gender'],
   ['Blood Group', 'bloodGroup'],
-  ['Hospital Base', 'hospitalId'],
-  ['Role', 'role'],
 ];
 
 const patientDetailValue = (details, keys) => {

@@ -42,7 +42,6 @@ frontend/
 │   ├── components/
 │   │   ├── ErrorBoundary.jsx
 │   │   ├── LoadingSpinner.jsx
-│   │   ├── Navbar.jsx
 │   │   ├── ProtectedRoute.jsx
 │   │   ├── Sidebar.jsx
 │   │   └── StatusBadge.jsx

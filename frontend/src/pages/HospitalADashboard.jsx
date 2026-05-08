@@ -34,8 +34,6 @@ const PATIENT_DETAIL_FIELDS = [
   ['Date of Birth', 'dateOfBirth', 'dob'],
   ['Gender', 'gender'],
   ['Blood Group', 'bloodGroup'],
-  ['Hospital Base', 'hospitalId'],
-  ['Role', 'role'],
 ];
 
 const HIE_PARTIES = { hip: 'HospitalB', hiu: 'HospitalA' };

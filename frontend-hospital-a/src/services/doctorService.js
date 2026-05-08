@@ -38,23 +38,6 @@ export const doctorService = {
   },
 
   /**
-   * POST /hospitalA/patient/to-fhir
-   * Body: HospitalAPatient (raw patient object)
-   * Returns FHIR JSON string.
-   */
-  convertPatientToFhir: async (patientData) => {
-    try {
-      const res = await api.post('/hospitalA/patient/to-fhir', patientData);
-      return res.data;
-    } catch (err) {
-      if (MOCK_ENABLED) {
-        return `{"resourceType":"Patient","id":"${patientData.patientId}"}`;
-      }
-      throw err;
-    }
-  },
-
-  /**
    * POST /hospitalB/op-consult
    * Body: raw FHIR JSON string (Content-Type: text/plain)
    * Returns: HospitalBOPConsultRecordDTO {
@@ -119,28 +102,6 @@ export const doctorService = {
   },
 
   /**
-   * POST /doctor/patients
-   * Doctor registers a new patient
-   */
-  createPatient: async (patientData) => {
-    try {
-      const res = await api.post('/doctor/patients', patientData);
-      return res.data;
-    } catch (err) {
-      if (MOCK_ENABLED) {
-        return {
-          message: 'Patient created successfully',
-          patientId: 'HA-P-' + Math.floor(Math.random() * 9000 + 1000),
-          username: patientData.firstName.toLowerCase() + '.' + patientData.lastName.toLowerCase(),
-          tempPassword: 'password123',
-          hospitalId: 'HOSP-A',
-        };
-      }
-      throw err;
-    }
-  },
-
-  /**
    * GET /auth/register/patient/{abhaId}
    * Fetch patient details by ABHA-ID from the central auth registry.
    * Note: endpoint lives in PatientRegistrationController, not DoctorPatientController.
@@ -177,20 +138,6 @@ export const doctorService = {
   },
 
   /**
-   * GET /hospitalA/op-consult
-   * (If applicable)
-   */
-  getHospitalAConsults: async () => {
-    try {
-      const res = await api.get('/hospitalA/op-consult');
-      return res.data;
-    } catch {
-      if (MOCK_ENABLED) return [];
-      throw new Error('Failed to fetch Hospital A intake records');
-    }
-  },
-
-  /**
    * GET /hospitalB/op-consult
    * Returns list of HospitalBOPConsultEntity
    */
@@ -222,4 +169,3 @@ export const doctorService = {
     return res.data;
   },
 };
-

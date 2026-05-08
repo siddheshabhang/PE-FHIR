@@ -2,7 +2,6 @@ package com.fhir.hospitalB.controller;
 
 import com.fhir.hospitalB.dto.HospitalBOPConsultRecordDTO;
 import com.fhir.hospitalB.dto.PatientPushRequestBDTO;
-import com.fhir.hospitalB.model.HospitalBPatient;
 import com.fhir.hospitalB.service.HospitalBService;
 import com.fhir.notification.PatientPushNotification;
 import com.fhir.shared.security.SecurityContextHelper;
@@ -28,15 +27,6 @@ public class HospitalBController {
 
     @Autowired
     private SecurityContextHelper securityContextHelper;
-
-    // ── Receive a FHIR Patient ───────────────────────────────────────────────
-
-    @PostMapping("/patient/receive-fhir")
-    public HospitalBPatient receiveFHIR(@RequestBody String fhirJson) {
-        return hospitalBService.receiveFhirPatient(fhirJson);
-    }
-
-    // ── Receive a FHIR Bundle (OP Consult) ───────────────────────────────────
 
     @PostMapping("/op-consult")
     public HospitalBOPConsultRecordDTO receiveFhirBundle(@RequestBody String fhirJson) {

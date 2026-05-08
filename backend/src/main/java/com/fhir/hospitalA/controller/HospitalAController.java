@@ -2,7 +2,6 @@ package com.fhir.hospitalA.controller;
 
 import com.fhir.hospitalA.dto.HospitalAOPConsultRecordDTO;
 import com.fhir.hospitalA.dto.PatientPushRequestDTO;
-import com.fhir.hospitalA.model.HospitalAPatient;
 import com.fhir.hospitalA.service.HospitalAService;
 import com.fhir.notification.PatientPushNotification;
 import com.fhir.shared.security.SecurityContextHelper;
@@ -29,15 +28,6 @@ public class HospitalAController {
     @Autowired
     private SecurityContextHelper securityContextHelper;
 
-    // ── Patient to FHIR ──────────────────────────────────────────────────────
-
-    @PostMapping("/patient/to-fhir")
-    public String convertToFHIR(@RequestBody HospitalAPatient patient) {
-        return hospitalAService.convertPatientToFhir(patient);
-    }
-
-    // ── Doctor-Initiated OP Consult ──────────────────────────────────────────
-
     @PostMapping("/op-consult")
     public String receiveOPConsult(@RequestBody HospitalAOPConsultRecordDTO consultRecord) {
         String requesterId = securityContextHelper.getCurrentUsername();
@@ -47,11 +37,6 @@ public class HospitalAController {
     @PostMapping("/op-consult/receive")
     public HospitalAOPConsultRecordDTO receiveFhirBundle(@RequestBody String fhirJson) {
         return hospitalAService.receiveFhirBundle(fhirJson);
-    }
-
-    @GetMapping("/op-consult")
-    public java.util.List<com.fhir.hospitalA.model.HospitalAOPConsultEntity> getAllConsults() {
-        return hospitalAService.getAllConsults();
     }
 
     // ── Patient-Initiated Push Flow ──────────────────────────────────────────

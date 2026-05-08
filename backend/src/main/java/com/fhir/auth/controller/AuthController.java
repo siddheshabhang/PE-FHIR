@@ -4,12 +4,12 @@ import com.fhir.auth.dto.LoginRequest;
 import com.fhir.auth.dto.LoginResponse;
 import com.fhir.auth.dto.RefreshRequest;
 import com.fhir.auth.dto.RegisterRequest;
-import com.fhir.auth.model.AppUser;
 import com.fhir.auth.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -19,19 +19,11 @@ public class AuthController {
     @Autowired
     private AuthService authService;
 
-    @Autowired
-    private com.fhir.auth.repository.AuthUserRepository authUserRepository;
-
     // ── POST /auth/register ───────────────────────────────────────────────────
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, String> register(@RequestBody RegisterRequest request) {
-        AppUser saved = authService.register(request);
-        return Map.of(
-                "message", "User registered successfully",
-                "username", saved.getUsername(),
-                "role", saved.getRole().name()
-        );
+        return authService.registerUser(request);
     }
 
     // ── POST /auth/login ──────────────────────────────────────────────────────
@@ -43,20 +35,12 @@ public class AuthController {
     // ── POST /auth/refresh ────────────────────────────────────────────────────
     @PostMapping("/refresh")
     public Map<String, String> refresh(@RequestBody RefreshRequest request) {
-        String newAccessToken = authService.refresh(request.getRefreshToken());
-        return Map.of("accessToken", newAccessToken);
+        return authService.refreshAccessToken(request.getRefreshToken());
     }
 
     // ── GET /auth/doctors ─────────────────────────────────────────────────────
     @GetMapping("/doctors")
-    public java.util.List<Map<String, String>> getDoctors(@RequestParam String hospitalId) {
-        return authUserRepository.findByRoleAndHospitalId(com.fhir.auth.model.UserRole.DOCTOR, hospitalId)
-                .stream()
-                .map(doc -> Map.of(
-                        "username", doc.getUsername(),
-                        "fullName", doc.getFullName() != null ? doc.getFullName() : doc.getUsername(),
-                        "specialization", doc.getSpecialization() != null ? doc.getSpecialization() : "General"
-                ))
-                .toList();
+    public List<Map<String, String>> getDoctors(@RequestParam String hospitalId) {
+        return authService.getDoctorsByHospital(hospitalId);
     }
 }

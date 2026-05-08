@@ -4,7 +4,6 @@ import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
 import com.fhir.hospitalB.dto.HospitalBOPConsultRecordDTO;
 import com.fhir.hospitalB.dto.PatientPushRequestBDTO;
-import com.fhir.hospitalB.mapper.FHIRToHospitalBMapper;
 import com.fhir.hospitalB.mapper.FhirBundleToHospitalBMapper;
 import com.fhir.hospitalB.mapper.HospitalBOPConsultToFhirMapper;
 import com.fhir.hospitalB.model.HospitalBPatient;
@@ -15,7 +14,6 @@ import com.fhir.notification.PatientPushNotification;
 import com.fhir.notification.PatientPushNotificationRepository;
 import com.fhir.shared.validation.FHIRValidatorBundle;
 import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -49,18 +47,6 @@ public class HospitalBService {
 
     @Autowired
     private PatientPushNotificationRepository pushNotificationRepository;
-
-    /**
-     * Parses a FHIR Patient JSON string and maps it to the Hospital B domain
-     * model.
-     *
-     * @param fhirJson raw FHIR-compliant Patient JSON
-     * @return the mapped {@link HospitalBPatient}
-     */
-    public HospitalBPatient receiveFhirPatient(String fhirJson) {
-        Patient patient = fhirContext.newJsonParser().parseResource(Patient.class, fhirJson);
-        return FHIRToHospitalBMapper.mapToHospitalB(patient);
-    }
 
     /**
      * Parses and validates a FHIR Bundle from another hospital, maps it into
